@@ -64,8 +64,7 @@ app.post('/api/social_media/addinfo', async (req, res) => {
 
         // Insert new user
         const result = await database.collection("user").insertOne({
-            id: (numofDocs + 1).toString(),
-            mobileOrEmail,
+            _id:mobileOrEmail,
             fullName,
             username,
             password

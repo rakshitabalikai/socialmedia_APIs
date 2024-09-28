@@ -103,6 +103,37 @@ app.post('/api/social_media/login', async (req, res) => {
         res.status(500).json({ message: "Error during login", error });
     }
 });
+app.post('/api/social_media/update_profile', async (req, res) => {
+    const { bio, username, gender, dateOfBirth, accountPrivacy, profilePic } = req.body;
+
+    try {
+        const userId = req.session.user.id;
+
+        // Update user document with new fields
+        const result = await database.collection('user').updateOne(
+            { _id: userId },
+            {
+                $set: {
+                    bio:bio, // Update bio
+                    username,
+                    gender:gender, // Update gender
+                    date_of_birth: dateOfBirth,
+                    account_privacy: accountPrivacy,
+                    profile_pic: profilePic,
+                },
+            }
+        );
+
+        if (result.modifiedCount > 0) {
+            res.json({ message: 'Profile updated successfully!' });
+        } else {
+            res.status(400).json({ message: 'No changes were made' });
+        }
+    } catch (error) {
+        console.error('Error updating profile:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
 
 // Route to Get User Info After Login
 app.get('/api/social_media/profile', (req, res) => {

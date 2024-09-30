@@ -109,25 +109,30 @@ app.post('/api/social_media/update_profile', async (req, res) => {
     try {
         const userId = req.session.user.id;
 
-        // Update user document with new fields
-        const result = await database.collection('user').updateOne(
-            { _id: userId },
-            {
-                $set: {
-                    bio:bio, // Update bio
-                    username,
-                    gender:gender, // Update gender
-                    date_of_birth: dateOfBirth,
-                    account_privacy: accountPrivacy,
-                    profile_pic: profilePic,
-                },
-            }
-        );
+        // Create an update object that only includes the fields that are not null or empty
+        const updateFields = {};
 
-        if (result.modifiedCount > 0) {
-            res.json({ message: 'Profile updated successfully!' });
+        if (bio) updateFields.bio = bio;  // Update only if bio is provided
+        if (username) updateFields.username = username;  // Update only if username is provided
+        if (gender) updateFields.gender = gender;  // Update only if gender is provided
+        if (dateOfBirth) updateFields.date_of_birth = dateOfBirth;  // Update only if dateOfBirth is provided
+        if (accountPrivacy) updateFields.account_privacy = accountPrivacy;  // Update only if accountPrivacy is provided
+        if (profilePic) updateFields.profile_pic = profilePic;  // Update only if profilePic is provided
+
+        // Only perform the update if there are fields to update
+        if (Object.keys(updateFields).length > 0) {
+            const result = await database.collection('user').updateOne(
+                { _id: userId },
+                { $set: updateFields }
+            );
+
+            if (result.modifiedCount > 0) {
+                res.json({ message: 'Profile updated successfully!' });
+            } else {
+                res.status(400).json({ message: 'No changes were made' });
+            }
         } else {
-            res.status(400).json({ message: 'No changes were made' });
+            res.status(400).json({ message: 'No valid fields provided for update' });
         }
     } catch (error) {
         console.error('Error updating profile:', error);

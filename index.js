@@ -40,9 +40,9 @@ async function connecttomongodb() {
 
 // Signup Route (User Registration)
 app.post('/api/social_media/signup', async (req, res) => {
-    const { mobileOrEmail, fullName, username, password } = req.body;
+    const { mobile, email, fullName, username, password, gender, dateOfBirth } = req.body;
 
-    if (!mobileOrEmail || !fullName || !username || !password) {
+    if (!mobile || !fullName || !username || !password || !email || !gender || !dateOfBirth) {
         return res.status(400).json({ message: "All fields are required" });
     }
 
@@ -58,12 +58,17 @@ app.post('/api/social_media/signup', async (req, res) => {
 
         // Insert new user
         const result = await database.collection("user").insertOne({
-            _id: mobileOrEmail,
+            mobile,
+            email,
             fullName,
             username,
+            gender,
+            dateOfBirth,
+            profilePic: "",
+            privacy: 0,
             password: hashedPassword // Store hashed password
         });
-
+        
         res.json({ message: "User added successfully", userId: result.insertedId });
     } catch (error) {
         res.status(500).json({ message: "Error inserting document", error });

@@ -165,8 +165,38 @@ app.get('/api/social_media/profile', (req, res) => {
     res.json({ user: req.session.user });
 });
 
+//search bar
+// API to search for users
+app.get('/api/social_media/search_users', async (req, res) => {
+    const { searchTerm } = req.query;
+
+    if (!searchTerm) {
+        return res.status(400).json({ message: "Search term is required" });
+    }
+
+    try {
+        // Perform a search based on username, email, or fullName
+        const users = await database.collection("user").find({
+            $or: [
+                { username: { $regex: searchTerm, $options: 'i' } },  // Case-insensitive search
+                { email: { $regex: searchTerm, $options: 'i' } },
+                { fullName: { $regex: searchTerm, $options: 'i' } }
+            ]
+        }).toArray();  // Convert the cursor to an array of users
+
+        // Return the search results
+        res.json(users);
+    } catch (error) {
+        console.error("Error fetching users:", error);
+        res.status(500).json({ message: "Error fetching users" });
+    }
+});
+
+
+
 // Start server
 app.listen(5038, () => {
     console.log("Server is running on port 5038");
     connecttomongodb();
 });
+

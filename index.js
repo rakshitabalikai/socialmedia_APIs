@@ -1,4 +1,4 @@
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const Express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
@@ -47,7 +47,13 @@ app.post('/api/social_media/signup', async (req, res) => {
     }
 
     try {
-        // Check if user already exists
+        // Check if the mobile and email exist in the student table
+        const student = await database.collection("students").findOne({ mobile, email });
+        if (!student) {
+            return res.status(400).json({ message: "Student not recognized" });
+        }
+
+        // Check if the username already exists
         const existingUser = await database.collection("user").findOne({ username });
         if (existingUser) {
             return res.status(400).json({ message: "Username already exists" });
@@ -68,7 +74,7 @@ app.post('/api/social_media/signup', async (req, res) => {
             privacy: 0,
             password: hashedPassword // Store hashed password
         });
-        
+
         res.json({ message: "User added successfully", userId: result.insertedId });
     } catch (error) {
         res.status(500).json({ message: "Error inserting document", error });
@@ -77,54 +83,63 @@ app.post('/api/social_media/signup', async (req, res) => {
 
 // Login Route (Authentication)
 app.post('/api/social_media/login', async (req, res) => {
-    const { mobileOrEmail, password } = req.body;
+    const { mobileOrEmailOrUsername, password } = req.body;
 
-    if (!mobileOrEmail || !password) {
+    if (!mobileOrEmailOrUsername || !password) {
         return res.status(400).json({ message: "All fields are required" });
     }
 
     try {
-        // Find user by mobileOrEmail
-        const user = await database.collection("user").findOne({ _id: mobileOrEmail });
+        // Find user by username, email, or mobile
+        const user = await database.collection("user").findOne({
+            $or: [
+                { username: mobileOrEmailOrUsername },
+                { email: mobileOrEmailOrUsername },
+                { mobile: mobileOrEmailOrUsername }
+            ]
+        });
+
+        // If user doesn't exist
         if (!user) {
-            return res.status(400).json({ message: "Invalid email or password" });
+            return res.status(400).json({ message: "Invalid username, email, or mobile number" });
         }
 
-        // Compare passwords
+        // Compare the password
         const isPasswordValid = await bcrypt.compare(password, user.password);
         if (!isPasswordValid) {
-            return res.status(400).json({ message: "Invalid email or password" });
+            return res.status(400).json({ message: "Invalid password" });
         }
 
         // Create a session for the user
         req.session.user = { id: user._id, username: user.username, fullName: user.fullName };
         
-        // Optionally, create a JWT token instead of session
-        // const token = jwt.sign({ id: user._id, username: user.username }, 'your_jwt_secret_key', { expiresIn: '1h' });
-        // res.json({ message: "Login successful", token });
-
         res.json({ message: "Login successful", user: req.session.user });
     } catch (error) {
         res.status(500).json({ message: "Error during login", error });
     }
 });
+
+// API to Update User Profile
 app.post('/api/social_media/update_profile', async (req, res) => {
     const { bio, username, gender, dateOfBirth, accountPrivacy, profilePic } = req.body;
 
     try {
-        const userId = req.session.user.id;
+        const userId = req.session?.user?.id;  // Ensure session and user are properly accessed
+        if (!userId) {
+            return res.status(401).json({ message: 'Unauthorized' });
+        }
 
         // Update user document with new fields
         const result = await database.collection('user').updateOne(
-            { _id: userId },
+            { _id: ObjectId(userId) },  // Cast userId to ObjectId
             {
                 $set: {
-                    bio:bio, // Update bio
-                    username,
-                    gender:gender, // Update gender
+                    bio: bio,
+                    username: username,
+                    gender: gender,
                     date_of_birth: dateOfBirth,
                     account_privacy: accountPrivacy,
-                    profile_pic: profilePic,
+                    profile_pic: profilePic, // Store Base64 encoded image
                 },
             }
         );
@@ -139,6 +154,7 @@ app.post('/api/social_media/update_profile', async (req, res) => {
         res.status(500).json({ message: 'Server error' });
     }
 });
+
 
 // Route to Get User Info After Login
 app.get('/api/social_media/profile', (req, res) => {

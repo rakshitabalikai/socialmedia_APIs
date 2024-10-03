@@ -1,22 +1,28 @@
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const Express = require('express');
 const cors = require('cors');
+const bodyParser = require('body-parser');
 const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const session = require('express-session'); // for session-based auth
-
+const session = require('express-session');
+const multer = require('multer');
 const app = Express();
+
+// Middleware
 app.use(cors());
-app.use(Express.json()); // Middleware to parse JSON bodies
+app.use(bodyParser.json({ limit: '200mb' })); // Setting limit to 200MB for JSON bodies
+app.use(bodyParser.urlencoded({ limit: '200mb', extended: true })); // Same limit for URL-encoded data
+app.use(Express.json());
+
 
 // Session Middleware
 app.use(session({
-    secret: 'your_secret_key',
+    secret: 'your_secret_key', // Change this in production
     resave: false,
     saveUninitialized: false,
-    cookie: { secure: false } // In production, set this to true with HTTPS
+    cookie: { secure: false } // Set true if using HTTPS in production
 }));
 
+// MongoDB Connection
 const dburl = "mongodb+srv://punithshanakanahalli:RaPufoHFjZl6eFtd@cluster0.ziyvd.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
 const databasename = "social_media";
 let database;
@@ -37,6 +43,21 @@ async function connecttomongodb() {
         console.error("MongoDB connection failed:", error);
     }
 }
+const upload = multer({
+    limits: { fileSize: 200 * 1024 * 1024 }, // 200MB
+});
+
+// Configure multer for file uploads (200MB limit for images)
+
+// Error Handling Middleware for Payload Too Large
+app.use((err, req, res, next) => {
+    if (err instanceof multer.MulterError) {
+        return res.status(413).json({ message: "File is too large. Maximum allowed size is 200MB." });
+    } else if (err.type === 'entity.too.large') {
+        return res.status(413).json({ message: "Request payload is too large." });
+    }
+    next(err);
+});
 
 // Signup Route (User Registration)
 app.post('/api/social_media/signup', async (req, res) => {
@@ -47,22 +68,18 @@ app.post('/api/social_media/signup', async (req, res) => {
     }
 
     try {
-        // Check if the mobile and email exist in the student table
         const student = await database.collection("students").findOne({ mobile, email });
         if (!student) {
             return res.status(400).json({ message: "Student not recognized" });
         }
 
-        // Check if the username already exists
         const existingUser = await database.collection("user").findOne({ username });
         if (existingUser) {
             return res.status(400).json({ message: "Username already exists" });
         }
 
-        // Hash the password
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // Insert new user
         const result = await database.collection("user").insertOne({
             mobile,
             email,
@@ -72,7 +89,7 @@ app.post('/api/social_media/signup', async (req, res) => {
             dateOfBirth,
             profilePic: "",
             privacy: 0,
-            password: hashedPassword // Store hashed password
+            password: hashedPassword
         });
 
         res.json({ message: "User added successfully", userId: result.insertedId });
@@ -90,7 +107,6 @@ app.post('/api/social_media/login', async (req, res) => {
     }
 
     try {
-        // Find user by username, email, or mobile
         const user = await database.collection("user").findOne({
             $or: [
                 { username: mobileOrEmailOrUsername },
@@ -99,62 +115,61 @@ app.post('/api/social_media/login', async (req, res) => {
             ]
         });
 
-        // If user doesn't exist
         if (!user) {
             return res.status(400).json({ message: "Invalid username, email, or mobile number" });
         }
 
-        // Compare the password
         const isPasswordValid = await bcrypt.compare(password, user.password);
         if (!isPasswordValid) {
             return res.status(400).json({ message: "Invalid password" });
         }
 
-        // Create a session for the user
-        req.session.user = { id: user._id, username: user.username, fullName: user.fullName };
-        
+        req.session.user = {
+            id: user._id,
+            username: user.username,
+            fullName: user.fullName,
+            bio: user.bio,
+            gender: user.gender,
+            dateOfBirth: user.dateOfBirth,
+            accountPrivacy: user.accountPrivacy,
+            profile_pic: user.profile_pic,
+            email: user.email,
+            mobile: user.mobile
+        };
+
         res.json({ message: "Login successful", user: req.session.user });
     } catch (error) {
         res.status(500).json({ message: "Error during login", error });
     }
 });
 
-// API to Update User Profile
-app.post('/api/social_media/update_profile', async (req, res) => {
-    const { bio, username, gender, dateOfBirth, accountPrivacy, profilePic } = req.body;
+// Endpoint for profile updates with file upload handling
+app.post('/api/social_media/update_profile', upload.single('profilePic'), async (req, res) => {
+    const { email, bio, username, gender, dateOfBirth, accountPrivacy } = req.body;
+    let profilePic = req.file ? req.file.buffer.toString('base64') : null;
 
     try {
-        const userId = req.session?.user?.id;  // Ensure session and user are properly accessed
-        if (!userId) {
-            return res.status(401).json({ message: 'Unauthorized' });
+        const user = await database.collection("user").findOne({ email });
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
         }
 
-        // Update user document with new fields
-        const result = await database.collection('user').updateOne(
-            { _id: ObjectId(userId) },  // Cast userId to ObjectId
-            {
-                $set: {
-                    bio: bio,
-                    username: username,
-                    gender: gender,
-                    date_of_birth: dateOfBirth,
-                    account_privacy: accountPrivacy,
-                    profile_pic: profilePic, // Store Base64 encoded image
-                },
-            }
-        );
+        const updateFields = { bio, username, gender, date_of_birth: dateOfBirth, account_privacy: accountPrivacy };
 
+        if (profilePic) {
+            updateFields.profile_pic = profilePic;
+        }
+
+        const result = await database.collection("user").updateOne({ email }, { $set: updateFields });
         if (result.modifiedCount > 0) {
             res.json({ message: 'Profile updated successfully!' });
         } else {
             res.status(400).json({ message: 'No changes were made' });
         }
     } catch (error) {
-        console.error('Error updating profile:', error);
-        res.status(500).json({ message: 'Server error' });
+        res.status(500).json({ message: 'Server error', error });
     }
 });
-
 
 // Route to Get User Info After Login
 app.get('/api/social_media/profile', (req, res) => {
@@ -165,38 +180,8 @@ app.get('/api/social_media/profile', (req, res) => {
     res.json({ user: req.session.user });
 });
 
-//search bar
-// API to search for users
-app.get('/api/social_media/search_users', async (req, res) => {
-    const { searchTerm } = req.query;
-
-    if (!searchTerm) {
-        return res.status(400).json({ message: "Search term is required" });
-    }
-
-    try {
-        // Perform a search based on username, email, or fullName
-        const users = await database.collection("user").find({
-            $or: [
-                { username: { $regex: searchTerm, $options: 'i' } },  // Case-insensitive search
-                { email: { $regex: searchTerm, $options: 'i' } },
-                { fullName: { $regex: searchTerm, $options: 'i' } }
-            ]
-        }).toArray();  // Convert the cursor to an array of users
-
-        // Return the search results
-        res.json(users);
-    } catch (error) {
-        console.error("Error fetching users:", error);
-        res.status(500).json({ message: "Error fetching users" });
-    }
-});
-
-
-
 // Start server
 app.listen(5038, () => {
     console.log("Server is running on port 5038");
     connecttomongodb();
 });
-

@@ -138,39 +138,43 @@ app.post('/api/social_media/login', async (req, res) => {
         };
 
         res.json({ message: "Login successful", user: req.session.user });
+        console.log(user);
     } catch (error) {
         res.status(500).json({ message: "Error during login", error });
     }
 });
 
 // Endpoint for profile updates with file upload handling
-app.post('/api/social_media/update_profile', upload.single('profilePic'), async (req, res) => {
-    const { email, bio, username, gender, dateOfBirth, accountPrivacy } = req.body;
-    let profilePic = req.file ? req.file.buffer.toString('base64') : null;
-
+app.post('/api/social_media/update_profile', async (req, res) => {
+    const { email, bio, username, gender, dateOfBirth, accountPrivacy, profilePic } = req.body;
+  
     try {
-        const user = await database.collection("user").findOne({ email });
-        if (!user) {
-            return res.status(404).json({ message: 'User not found' });
-        }
-
-        const updateFields = { bio, username, gender, date_of_birth: dateOfBirth, account_privacy: accountPrivacy };
-
-        if (profilePic) {
-            updateFields.profile_pic = profilePic;
-        }
-
-        const result = await database.collection("user").updateOne({ email }, { $set: updateFields });
-        if (result.modifiedCount > 0) {
-            res.json({ message: 'Profile updated successfully!' });
-        } else {
-            res.status(400).json({ message: 'No changes were made' });
-        }
+      // Find the user by email
+      const user = await database.collection("user").findOne({ email });
+      if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+  
+      // Update the profile fields
+      const updateFields = { bio, username, gender, date_of_birth: dateOfBirth, account_privacy: accountPrivacy };
+  
+      // Only update the profile picture if one is provided
+      if (profilePic) {
+        updateFields.profile_pic = profilePic; // Base64 string will be stored directly in the database
+      }
+  
+      const result = await database.collection("user").updateOne({ email }, { $set: updateFields });
+  
+      if (result.modifiedCount > 0) {
+        res.json({ message: 'Profile updated successfully!' });
+      } else {
+        res.status(400).json({ message: 'No changes were made' });
+      }
     } catch (error) {
-        res.status(500).json({ message: 'Server error', error });
+      res.status(500).json({ message: 'Server error', error });
     }
-});
-
+  });
+  
 // Route to Get User Info After Login
 app.get('/api/social_media/profile', (req, res) => {
     if (!req.session.user) {

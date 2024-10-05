@@ -225,6 +225,45 @@ app.get('/api/social_media/search', async (req, res) => {
     }
 });
 
+app.post('/api/social_media/follow', async (req, res) => {
+    try {
+        const { follower, user_id } = req.body;
+
+        // Input validation
+        if (!follower || !user_id) {
+            return res.status(400).json({ message: "follower and user_id are required" });
+        }
+
+        // Check if the user is already following the other user
+        const existingFollow = await database.collection("followers").findOne({
+            user_id,
+            follower
+        });
+
+        if (existingFollow) {
+            return res.status(400).json({ message: "You are already following this user." });
+        }
+
+        // Insert the follow data into the database
+        const result = await database.collection("followers").insertOne({
+            user_id,
+            follower
+        });
+
+        res.status(201).json({ message: "following", result });
+    } catch (error) {
+        if (error.code === 11000) {
+            // Handle unique index violation
+            return res.status(400).json({ message: "You are already following this user." });
+        }
+
+        console.error("Error following user:", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
+});
+
+
+
 
 // Start server
 app.listen(5038, () => {

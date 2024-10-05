@@ -102,7 +102,7 @@ app.post('/api/social_media/signup', async (req, res) => {
 app.post('/api/social_media/login', async (req, res) => {
     const { mobileOrEmailOrUsername, password } = req.body;
 
-    if (!mobileOrEmailOrUsername || !password) {
+    if (!mobileOrEmailOrUsername || !password) { 
         return res.status(400).json({ message: "All fields are required" });
     }
 
@@ -183,6 +183,48 @@ app.get('/api/social_media/profile', (req, res) => {
 
     res.json({ user: req.session.user });
 });
+
+
+// Search API (by username or full name)
+app.get('/api/social_media/search', async (req, res) => {
+    const { query } = req.query;
+
+    if (!query) {
+        return res.status(400).json({ message: "Search query is required" });
+    }
+
+    try {
+        // Search users by matching either the username or full name
+        const users = await database.collection("user").find({
+            $or: [
+                { username: { $regex: query, $options: 'i' } }, // Case-insensitive regex for username
+                { fullName: { $regex: query, $options: 'i' } }  // Case-insensitive regex for full name
+            ]
+        }).toArray();  // Convert the cursor to an array
+
+        if (users.length === 0) {
+            return res.status(404).json({ message: "No users found" });
+        }
+
+        // Return the found users (excluding sensitive info like passwords)
+        const result = users.map(user => ({
+            id: user._id,
+            username: user.username,
+            fullName: user.fullName,
+            bio: user.bio,
+            gender: user.gender,
+            dateOfBirth: user.dateOfBirth,
+            profile_pic: user.profile_pic,
+            accountPrivacy: user.accountPrivacy
+        }));
+        console.log(result);
+
+        res.json({ users: result });
+    } catch (error) {
+        res.status(500).json({ message: "Error searching for users", error });
+    }
+});
+
 
 // Start server
 app.listen(5038, () => {

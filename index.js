@@ -420,7 +420,7 @@ app.put('/api/social_media/admin/student/:studentId', async (req, res) => {
 });
 
 // Delete a user
-app.delete('/api/social_media/admin/user/:userId', async (req, res) => {
+app.delete('/api/social_media/admin/deleteuser/:userId', async (req, res) => {
     const { userId } = req.params;
 
     try {
@@ -437,7 +437,7 @@ app.delete('/api/social_media/admin/user/:userId', async (req, res) => {
 });
 
 // Delete a student
-app.delete('/api/social_media/admin/student/:studentId', async (req, res) => {
+app.delete('/api/social_media/admin/deletestudent/:studentId', async (req, res) => {
     const { studentId } = req.params;
 
     try {
@@ -452,6 +452,7 @@ app.delete('/api/social_media/admin/student/:studentId', async (req, res) => {
         res.status(500).json({ message: "Error deleting student", error });
     }
 });
+
 
 // Middleware for admin authentication
 const adminAuth = (req, res, next) => {

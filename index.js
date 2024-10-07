@@ -300,6 +300,171 @@ app.get('/api/social_media/user/:userId', async (req, res) => {
     }
 });
 
+ // Admin Login Route
+app.post('/api/social_media/admin/login', async (req, res) => {
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+        return res.status(400).json({ message: "Username and password are required" });
+    }
+
+    try {
+        // Check if the admin exists
+        const admin = await database.collection("admin").findOne({ username });
+        if (!admin) {
+            return res.status(400).json({ message: "Invalid admin credentials" });
+        }
+
+        // Verify the password
+        const isPasswordValid = await bcrypt.compare(password, admin.password);
+        if (!isPasswordValid) {
+            return res.status(400).json({ message: "Invalid password" });
+        }
+
+        // Set admin session
+        req.session.admin = {
+            id: admin._id,
+            username: admin.username,
+        };
+
+        res.json({ message: "Admin login successful", admin: req.session.admin });
+    } catch (error) {
+        res.status(500).json({ message: "Error during admin login", error });
+    }
+});
+
+// Fetch all students
+app.get('/api/social_media/admin/students', async (req, res) => {
+    try {
+        const students = await database.collection("students").find().toArray();
+        res.json({ students });
+    } catch (error) {
+        res.status(500).json({ message: "Error fetching students data", error });
+    }
+});
+
+// Fetch all users
+app.get('/api/social_media/admin/users', async (req, res) => {
+    try {
+        const users = await database.collection("user").find().toArray();
+        res.json({ users });
+    } catch (error) {
+        res.status(500).json({ message: "Error fetching users data", error });
+    }
+});
+
+ // Update user data (only passed fields)
+app.put('/api/social_media/admin/user/:userId', async (req, res) => {
+    const { userId } = req.params;
+    const updateData = req.body;
+
+    // Remove any empty or undefined fields from the updateData
+    Object.keys(updateData).forEach(key => {
+        if (updateData[key] === '' || updateData[key] === undefined) {
+            delete updateData[key];
+        }
+    });
+
+    if (Object.keys(updateData).length === 0) {
+        return res.status(400).json({ message: "No fields to update" });
+    }
+
+    try {
+        // Update user data
+        const result = await database.collection("user").updateOne(
+            { _id: new ObjectId(userId) },
+            { $set: updateData }
+        );
+
+        if (result.modifiedCount > 0) {
+            res.json({ message: "User updated successfully" });
+        } else {
+            res.status(400).json({ message: "No changes made to user" });
+        }
+    } catch (error) {
+        res.status(500).json({ message: "Error updating user", error });
+    }
+});
+
+// Update student data (only passed fields)
+app.put('/api/social_media/admin/student/:studentId', async (req, res) => {
+    const { studentId } = req.params;
+    const updateData = req.body;
+
+    // Remove any empty or undefined fields from the updateData
+    Object.keys(updateData).forEach(key => {
+        if (updateData[key] === '' || updateData[key] === undefined) {
+            delete updateData[key];
+        }
+    });
+
+    if (Object.keys(updateData).length === 0) {
+        return res.status(400).json({ message: "No fields to update" });
+    }
+
+    try {
+        // Update student data
+        const result = await database.collection("students").updateOne(
+            { _id: new ObjectId(studentId) },
+            { $set: updateData }
+        );
+
+        if (result.modifiedCount > 0) {
+            res.json({ message: "Student updated successfully" });
+        } else {
+            res.status(400).json({ message: "No changes made to student" });
+        }
+    } catch (error) {
+        res.status(500).json({ message: "Error updating student", error });
+    }
+});
+
+// Delete a user
+app.delete('/api/social_media/admin/user/:userId', async (req, res) => {
+    const { userId } = req.params;
+
+    try {
+        const result = await database.collection("user").deleteOne({ _id: new ObjectId(userId) });
+
+        if (result.deletedCount > 0) {
+            res.json({ message: "User deleted successfully" });
+        } else {
+            res.status(404).json({ message: "User not found" });
+        }
+    } catch (error) {
+        res.status(500).json({ message: "Error deleting user", error });
+    }
+});
+
+// Delete a student
+app.delete('/api/social_media/admin/student/:studentId', async (req, res) => {
+    const { studentId } = req.params;
+
+    try {
+        const result = await database.collection("students").deleteOne({ _id: new ObjectId(studentId) });
+
+        if (result.deletedCount > 0) {
+            res.json({ message: "Student deleted successfully" });
+        } else {
+            res.status(404).json({ message: "Student not found" });
+        }
+    } catch (error) {
+        res.status(500).json({ message: "Error deleting student", error });
+    }
+});
+
+// Middleware for admin authentication
+const adminAuth = (req, res, next) => {
+    if (!req.session.admin) {
+        return res.status(401).json({ message: "Unauthorized" });
+    }
+    next();
+};
+
+
+
+
+
 
 
 

@@ -462,10 +462,84 @@ const adminAuth = (req, res, next) => {
     next();
 };
 
+app.post('/api/social_media/Edit_student', async (req, res) => {
+    const { _id, name, email, mobile, gender, dateOfBirth, usn } = req.body;
+  
+    // Validate request body
+    if (!_id || !name || !email || !mobile || !gender || !dateOfBirth || !usn) {
+      return res.status(400).json({ message: 'All fields are required' });
+    }
+  
+    try {
+      // Find the student by _id and update their profile
+      const student = await Student.findById(_id);
+      if (!student) {
+        return res.status(404).json({ message: 'Student not found' });
+      }
+  
+      student.name = name;
+      student.email = email;
+      student.mobile = mobile;
+      student.gender = gender;
+      student.dateOfBirth = dateOfBirth;
+      student.usn = usn;
+  
+      await student.save(); // Save the updated profile
+  
+      res.json({ message: 'Profile updated successfully' });
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      res.status(500).json({ message: 'Internal server error' });
+    }
+  });
+  
+  // Start the server
+//   const PORT = process.env.PORT || 5038;
+//   app.listen(PORT, () => {
+//     console.log(`Server running on port ${PORT}`);
+//   });
+  
+app.post('/api/social_media/admin/addstudent', async (req, res) => {
+    const { name, email, mobile, gender, dateOfBirth, usn } = req.body;
 
+    // Debugging log
+    console.log('Received data:', req.body);
 
+    // Validate request body
+    if (!name || !email || !mobile || !gender || !dateOfBirth || !usn) {
+        console.error('Validation Error: All fields are required');
+        return res.status(400).json({ message: 'All fields are required' });
+    }
 
+    try {
+        // Check if a student with the same USN already exists
+        const existingStudent = await database.collection("students").findOne({ usn });
+        if (existingStudent) {
+            console.error('Error: Student with this USN already exists');
+            return res.status(400).json({ message: 'Student with this USN already exists' });
+        }
 
+        // Create a new student object
+        const newStudent = {
+            name,
+            email,
+            mobile,
+            gender,
+            dateOfBirth: new Date(dateOfBirth), // Ensure the date is stored correctly
+            usn,
+        };
+
+        // Insert the new student into the database
+        await database.collection("students").insertOne(newStudent);
+        console.log('Student added:', newStudent); // Log the newly created student
+        res.status(201).json({ message: 'Student added successfully', student: newStudent });
+    } catch (error) {
+        console.error('Error adding student:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+  
 
 
 

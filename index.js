@@ -300,6 +300,57 @@ app.get('/api/social_media/user/:userId', async (req, res) => {
     }
 });
 
+app.post('/api/social_media/uploadpost', async (req, res) => {
+    try {
+        const { file, caption, type } = req.body;
+
+        // Input validation
+        if (!file || !caption || type !== 'post') {
+            return res.status(400).json({ message: "file, caption, and valid type 'post' are required" });
+        }
+
+        // Insert the post data into the database
+        const result = await database.collection("posts").insertOne({
+            file,
+            caption,
+            type,
+            createdAt: new Date(),
+        });
+
+        res.status(201).json({ message: "Post uploaded successfully", result });
+    } catch (error) {
+        console.error("Error uploading post:", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
+});
+
+app.post('/api/social_media/uploadstory', async (req, res) => {
+    try {
+        const { file, caption, type } = req.body;
+
+        // Input validation
+        if (!file || !caption || type !== 'story') {
+            return res.status(400).json({ message: "file, caption, and valid type 'story' are required" });
+        }
+
+        // Insert the story data into the database
+        const result = await database.collection("story").insertOne({
+            file,
+            caption,
+            type,
+            createdAt: new Date(),
+            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // Story expires in 24 hours
+        });
+
+        res.status(201).json({ message: "Story uploaded successfully", result });
+    } catch (error) {
+        console.error("Error uploading story:", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
+});
+
+
+
  // Admin Login Route
 app.post('/api/social_media/admin/login', async (req, res) => {
     const { username, password } = req.body;

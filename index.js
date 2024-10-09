@@ -349,6 +349,29 @@ app.post('/api/social_media/uploadstory', async (req, res) => {
     }
 });
 
+// Fetch posts
+app.get('/api/social_media/posts', async (req, res) => {
+    try {
+      const posts = await database.collection('posts').find({}).toArray();
+      res.status(200).json(posts); // Send JSON response
+    } catch (error) {
+      console.error('Error fetching posts:', error);
+      res.status(500).json({ message: 'Internal server error' });
+    }
+  });
+
+  // Fetch stories
+  app.get('/api/social_media/stories', async (req, res) => {
+    try {
+      const stories = await database.collection('stories').find({}).toArray();
+      res.status(200).json(stories); // Send JSON response
+    } catch (error) {
+      console.error('Error fetching stories:', error);
+      res.status(500).json({ message: 'Internal server error' });
+    }
+  });
+  
+
 
 
  // Admin Login Route

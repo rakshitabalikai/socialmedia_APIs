@@ -302,15 +302,18 @@ app.get('/api/social_media/user/:userId', async (req, res) => {
 
 app.post('/api/social_media/uploadpost', async (req, res) => {
     try {
-        const { file, caption, type } = req.body;
-
+        const { user_id, file, caption, type } = req.body;
+        console.log(user_id,caption,type);
         // Input validation
         if (!file || !caption || type !== 'post') {
             return res.status(400).json({ message: "file, caption, and valid type 'post' are required" });
         }
-
+        if ( !user_id){
+            return res.status(400).json({message: "login required"});
+        }
         // Insert the post data into the database
         const result = await database.collection("posts").insertOne({
+            user_id,
             file,
             caption,
             type,
@@ -326,7 +329,7 @@ app.post('/api/social_media/uploadpost', async (req, res) => {
 
 app.post('/api/social_media/uploadstory', async (req, res) => {
     try {
-        const { file, caption, type } = req.body;
+        const { user_id,file, caption, type } = req.body;
 
         // Input validation
         if (!file || !caption || type !== 'story') {
@@ -335,6 +338,7 @@ app.post('/api/social_media/uploadstory', async (req, res) => {
 
         // Insert the story data into the database
         const result = await database.collection("story").insertOne({
+            user_id,
             file,
             caption,
             type,

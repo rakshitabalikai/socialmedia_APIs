@@ -262,6 +262,28 @@ app.post('/api/social_media/follow', async (req, res) => {
     }
 });
 
+app.get('/api/social_media/follow_stats/:user_id', async (req, res) => {
+    const { user_id } = req.params;
+
+    try {
+        // Count the number of people the user is following
+        const followingCount = await database.collection('followers').countDocuments({ follower:new ObjectId (user_id)  });
+
+        // Count the number of people following the user
+        const followersCount = await database.collection('followers').countDocuments({ user_id:new ObjectId (user_id) });
+
+        res.status(200).json({
+            followingCount,
+            followersCount
+        });
+        console.log(followersCount);
+    } catch (error) {
+        console.error("Error fetching follow stats:", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
+});
+
+
 app.get('/api/social_media/user/:userId', async (req, res) => {
     const { userId } = req.params;  // Get userId from the request parameters
 
@@ -355,16 +377,40 @@ app.post('/api/social_media/uploadstory', async (req, res) => {
 
 // Fetch posts
 app.get('/api/social_media/posts', async (req, res) => {
-    try {
-      const posts = await database.collection('posts').find({}).toArray();
-      res.status(200).json(posts); 
-      console.log(posts);// Send JSON response
-    } catch (error) {
-      console.error('Error fetching posts:', error);
-      res.status(500).json({ message: 'Internal server error' });
-    }
+  try {
+    // Fetch the posts from the 'posts' collection
+    const posts = await database.collection('posts').find({}).toArray();
 
-  });
+    // Use Promise.all to fetch the user details for each post
+    const postsWithUserDetails = await Promise.all(posts.map(async (post) => {
+      // Convert the user_id from the post to ObjectId
+      const user = await database.collection('user').findOne(
+        { _id:new ObjectId(post.user_id) }, // Convert post.user_id to ObjectId
+        { projection: { username: 1, profile_pic: 1 } }
+      );
+
+      // Combine the post data with the user data
+      return {
+        ...post,
+        user: {
+          username: user?.username || 'Unknown', // If user not found, default to 'Unknown'
+          profile_pic: user?.profile_pic || 'default-pic-url' // Default profile pic if not available
+        }
+      };
+    }));
+    
+    // Log for debugging
+    console.log(postsWithUserDetails);
+
+    // Send the combined result as the response
+    res.status(200).json(postsWithUserDetails);
+  } catch (error) {
+    console.error('Error fetching posts:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+  
 
   // Fetch stories
   app.get('/api/social_media/stories', async (req, res) => {

@@ -496,7 +496,7 @@ app.put('/api/social_media/admin/user/:userId', async (req, res) => {
     }
 
     try {
-        // Update user data
+    // Update user data
         const result = await database.collection("user").updateOne(
             { _id: new ObjectId(userId) },
             { $set: updateData }
@@ -511,6 +511,46 @@ app.put('/api/social_media/admin/user/:userId', async (req, res) => {
         res.status(500).json({ message: "Error updating user", error });
     }
 });
+
+// Delete a user
+app.delete('/api/social_media/admin/deleteuser/:userId', async (req, res) => {
+    const { userId } = req.params;
+
+    try {
+        // 1. Delete the user's posts
+        await database.collection("post").deleteMany({ authorId: new ObjectId(userId) });
+
+        // 2. Delete the user's comments
+        await database.collection("comment").deleteMany({ userId: new ObjectId(userId) });
+
+        // 3. Remove the user's likes from posts
+        await database.collection("post").updateMany(
+            { likes: new ObjectId(userId) },
+            { $pull: { likes: new ObjectId(userId) } }
+        );
+
+        // 4. Remove the user from other users' followers lists
+        await database.collection("user").updateMany(
+            { followers: new ObjectId(userId) },
+            { $pull: { followers: new ObjectId(userId) } }
+        );
+
+        // 5. Delete the user
+        const result = await database.collection("user").deleteOne({ _id: new ObjectId(userId) });
+
+        if (result.deletedCount > 0) {
+            res.json({ message: "User and all related data deleted successfully" });
+        } else {
+            res.status(404).json({ message: "User not found" });
+        }
+    } catch (error) {
+        console.error('Error deleting user:', error);
+        res.status(500).json({ message: "Error deleting user", error });
+    }
+});
+
+
+
 
 // Update student data (only passed fields)
 app.put('/api/social_media/admin/student/:studentId', async (req, res) => {
@@ -545,22 +585,6 @@ app.put('/api/social_media/admin/student/:studentId', async (req, res) => {
     }
 });
 
-// Delete a user
-app.delete('/api/social_media/admin/deleteuser/:userId', async (req, res) => {
-    const { userId } = req.params;
-
-    try {
-        const result = await database.collection("user").deleteOne({ _id: new ObjectId(userId) });
-
-        if (result.deletedCount > 0) {
-            res.json({ message: "User deleted successfully" });
-        } else {
-            res.status(404).json({ message: "User not found" });
-        }
-    } catch (error) {
-        res.status(500).json({ message: "Error deleting user", error });
-    }
-});
 
 // Delete a student
 app.delete('/api/social_media/admin/deletestudent/:studentId', async (req, res) => {
@@ -665,9 +689,48 @@ app.post('/api/social_media/admin/addstudent', async (req, res) => {
     }
 });
 
+// GET route to fetch all admins
+app.get('/admins', async (req, res) => {
+    try {
+      const admins = await Admin.find(); // Fetch all admins from the database
+      if (admins.length === 0) {
+        return res.status(404).json({ message: 'No admins found' });
+      }
+      res.json({ admins });
+    } catch (error) {
+      console.error('Error fetching admins:', error);
+      res.status(500).json({ message: 'Error fetching admin data' });
+    }
+  });
+
+// POST route to add a new admin
+router.post('/addadmin', async (req, res) => {
+    const { name, email, password, phoneNumber } = req.body;
   
-
-
+    // Input validation (you can expand this)
+    if (!name || !email || !password || !phoneNumber) {
+      return res.status(400).json({ message: 'All fields are required' });
+    }
+  
+    try {
+      // Create a new admin object
+      const newAdmin = new Admin({
+        name,
+        email,
+        password,  // Note: Consider hashing the password for security
+        phone: phoneNumber,
+      });
+  
+      // Save the new admin to the database
+      const savedAdmin = await newAdmin.save();
+  
+      // Respond with the created admin's data
+      res.status(201).json({ admin: savedAdmin });
+    } catch (error) {
+      console.error('Error adding admin:', error);
+      res.status(500).json({ message: 'Error adding admin' });
+    }
+  });
 
 // Start server
 app.listen(5038, () => {

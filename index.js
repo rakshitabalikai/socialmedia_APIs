@@ -690,7 +690,7 @@ app.post('/api/social_media/admin/addstudent', async (req, res) => {
 });
 
 // GET route to fetch all admins
-app.get('/admins', async (req, res) => {
+app.get('/api/social_media//admin', async (req, res) => {
     try {
       const admins = await Admin.find(); // Fetch all admins from the database
       if (admins.length === 0) {
@@ -703,35 +703,47 @@ app.get('/admins', async (req, res) => {
     }
   });
 
-// POST route to add a new admin
-router.post('/addadmin', async (req, res) => {
+  app.post('/api/social_media/admin/addadmin', async (req, res) => {
     const { name, email, password, phoneNumber } = req.body;
-  
-    // Input validation (you can expand this)
-    if (!name || !email || !password || !phoneNumber) {
-      return res.status(400).json({ message: 'All fields are required' });
-    }
-  
-    try {
-      // Create a new admin object
-      const newAdmin = new Admin({
-        name,
-        email,
-        password,  // Note: Consider hashing the password for security
-        phone: phoneNumber,
-      });
-  
-      // Save the new admin to the database
-      const savedAdmin = await newAdmin.save();
-  
-      // Respond with the created admin's data
-      res.status(201).json({ admin: savedAdmin });
-    } catch (error) {
-      console.error('Error adding admin:', error);
-      res.status(500).json({ message: 'Error adding admin' });
-    }
-  });
 
+    // Input validation
+    if (!name || !email || !password || !phoneNumber) {
+        return res.status(400).json({ message: 'All fields are required' });
+    }
+
+    try {
+        // Check if admin with the same email or phone number already exists
+        const existingAdmin = await database.collection('admins').findOne({
+            $or: [{ email }, { phone: phoneNumber }]
+        });
+
+        if (existingAdmin) {
+            return res.status(400).json({ message: 'Admin with this email or phone number already exists' });
+        }
+
+        // Ensure strong password hashing
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        // Create a new admin object
+        const newAdmin = {
+            name,
+            email,
+            password: hashedPassword, // Save hashed password
+            phone: phoneNumber,
+        };
+
+        // Insert the new admin into the database
+        const result = await database.collection('admins').insertOne(newAdmin);
+
+        // Respond with the inserted admin's ID
+        res.status(201).json({ message: 'Admin added successfully', adminId: result.insertedId });
+    } catch (error) {
+        console.error('Error adding admin:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+  
 // Start server
 app.listen(5038, () => {
     console.log("Server is running on port 5038");

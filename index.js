@@ -261,27 +261,39 @@ app.post('/api/social_media/follow', async (req, res) => {
         res.status(500).json({ message: "Internal server error" });
     }
 });
-
+ 
 app.get('/api/social_media/follow_stats/:user_id', async (req, res) => {
     const { user_id } = req.params;
+    console.log('User ID:', user_id);
 
     try {
+        // Check if user_id is a valid 24-character hex string before converting
+        if (!ObjectId.isValid(user_id)) {
+            return res.status(400).json({ message: 'Invalid user ID' });
+        }
+
+        // Convert to ObjectId if valid
+        const userObjectId = new ObjectId(user_id);
+
+        // Ensure the field names and types match your MongoDB collection
         // Count the number of people the user is following
-        const followingCount = await database.collection('followers').countDocuments({ follower:new ObjectId (user_id)  });
+        const followingCount = await database.collection('followers').countDocuments({ follower: userObjectId });
 
         // Count the number of people following the user
-        const followersCount = await database.collection('followers').countDocuments({ user_id:new ObjectId (user_id) });
+        const followersCount = await database.collection('followers').countDocuments({ user_id: userObjectId });
+
+        console.log('Followers:', followersCount, 'Following:', followingCount);
 
         res.status(200).json({
             followingCount,
             followersCount
         });
-        console.log(followersCount);
     } catch (error) {
         console.error("Error fetching follow stats:", error);
         res.status(500).json({ message: "Internal server error" });
     }
 });
+
 
 
 app.get('/api/social_media/user/:userId', async (req, res) => {

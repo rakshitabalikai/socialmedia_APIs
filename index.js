@@ -1,5 +1,4 @@
 
-
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const Express = require('express');
 const mongoose = require('mongoose');
@@ -327,6 +326,53 @@ app.get('/api/social_media/follow_stats/:user_id', async (req, res) => {
         res.status(500).json({ message: "Internal server error" });
     }
 });
+
+app.get('/api/social_media/following/:user_id', async (req, res) => {
+    const { user_id } = req.params;
+
+    if (!ObjectId.isValid(user_id)) {
+        return res.status(400).json({ message: "Invalid user ID" });
+    }
+
+    try {
+        const loggedInUserId = new ObjectId(user_id);
+
+        // Step 1: Find all entries in the 'followers' collection where the 'follower' matches loggedInUserId
+        const followedUsers = await database.collection('followers').find({
+            follower: loggedInUserId
+        }).toArray();
+
+        if (followedUsers.length === 0) {
+            return res.status(404).json({ message: "You are not following anyone." });
+        }
+
+        // Step 2: Extract the user_ids of the users being followed
+        const followedUserIds = followedUsers.map(follow => follow.user_id);
+
+        // Step 3: Retrieve details of the users being followed from the 'user' collection
+        const users = await database.collection('user').find({
+            _id: { $in: followedUserIds }
+        }).toArray();
+
+        // Return only necessary details
+        const result = users.map(user => ({
+            id: user._id,
+            username: user.username,
+            fullName: user.fullName,
+            bio: user.bio,
+            gender: user.gender,
+            dateOfBirth: user.dateOfBirth,
+            profile_pic: user.profile_pic,
+            accountPrivacy: user.accountPrivacy
+        }));
+
+        res.status(200).json({ users: result });
+    } catch (error) {
+        console.error("Error fetching following users:", error);
+        res.status(500).json({ message: "Internal server error", error });
+    }
+});
+
 
 
 

@@ -1,3 +1,5 @@
+
+
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const Express = require('express');
 const mongoose = require('mongoose');
@@ -6,7 +8,21 @@ const bodyParser = require('body-parser');
 const bcrypt = require('bcryptjs');
 const session = require('express-session');
 const multer = require('multer');
+const http = require('http'); // Import http module
 const app = Express();
+const { Server } = require("socket.io");
+// import { WebSocketServer } from 'ws';
+const WebSocketServer = require('ws').WebSocketServer;
+
+
+// Create an HTTP server
+// Initialize socket.io with the HTTP server
+// const io = new Server(server, {
+//     cors: {
+//         origin: "http://localhost:3000", // Allow your React app to connect
+//         methods: ["GET", "POST"]
+//     }
+// });
 
 // Middleware
 app.use(cors());
@@ -14,13 +30,12 @@ app.use(bodyParser.json({ limit: '200mb' })); // Setting limit to 200MB for JSON
 app.use(bodyParser.urlencoded({ limit: '200mb', extended: true })); // Same limit for URL-encoded data
 app.use(Express.json());
 
-
 // Session Middleware
 app.use(session({
-    secret: 'your_secret_key', // Change this in production
+    secret: 'your_secret_key',
     resave: false,
     saveUninitialized: false,
-    cookie: { secure: false } // Set true if using HTTPS in production
+    cookie: { secure: false }
 }));
 
 // MongoDB Connection
@@ -44,11 +59,10 @@ async function connecttomongodb() {
         console.error("MongoDB connection failed:", error);
     }
 }
+
 const upload = multer({
     limits: { fileSize: 200 * 1024 * 1024 }, // 200MB
 });
-
-// Configure multer for file uploads (200MB limit for images)
 
 // Error Handling Middleware for Payload Too Large
 app.use((err, req, res, next) => {
@@ -59,6 +73,25 @@ app.use((err, req, res, next) => {
     }
     next(err);
 });
+
+// io connection
+// io.on("connection", (socket) => {
+//     console.log("A user connected:", socket.id);
+
+//     // Handle socket events, e.g., receiving messages
+//     socket.on('sendMessage', (message) => {
+//         console.log("Message received:", message);
+//         // Broadcast message to all connected clients
+//         io.emit('receiveMessage', message);
+//     });
+
+//     // Handle disconnection
+//     socket.on("disconnect", () => {
+//         console.log("User disconnected:", socket.id);
+//     });
+// });
+
+
 
 // Signup Route (User Registration)
 app.post('/api/social_media/signup', async (req, res) => {
@@ -795,8 +828,26 @@ app.post('/api/social_media/admin/addstaff', async (req, res) => {
 
 
   
+
+// Start the server
+// const PORT = process.env.PORT || 4000;
+// server.listen(PORT, () => {
+//     console.log(`Server is running on port ${PORT}`);
+// });
 // Start server
-app.listen(5038, () => {
+ const server=app.listen(5038, () => {
     console.log("Server is running on port 5038");
     connecttomongodb();
 });
+
+const wss = new WebSocketServer({server})
+
+wss.on("connection",(ws) =>{
+    ws.on("message",(data) =>{
+        console.log("data from cilent: %s", data);
+        ws.send("thanks")
+    }
+    )
+}
+
+)

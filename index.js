@@ -1,5 +1,6 @@
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const Express = require('express');
+const mongoose = require('mongoose');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const bcrypt = require('bcryptjs');
@@ -754,6 +755,44 @@ app.get('/api/social_media//admin', async (req, res) => {
         res.status(500).json({ message: 'Internal server error' });
     }
 });
+  //addstaff
+// Define staff schema and model
+const staffSchema = new mongoose.Schema({
+    name: { type: String, required: true },
+    email: { type: String, required: true, unique: true },
+    department: { type: String, required: true },
+    mobile: { type: String, required: true }
+});
+
+const Staff = mongoose.model('Staff', staffSchema);
+
+// POST route to add staff
+app.post('/api/social_media/admin/addstaff', async (req, res) => {
+    const { name, email, department, mobile } = req.body;
+
+    // Validation to ensure all fields are filled
+    if (!name || !email || !department || !mobile) {
+        return res.status(400).json({ message: 'All fields are required' });
+    }
+
+    try {
+        // Create and save new staff entry
+        const newStaff = new Staff({ name, email, department, mobile });
+        const savedStaff = await newStaff.save();
+
+        // Send success message after saving
+        res.status(201).json({ message: 'Staff added successfully!', staff: savedStaff });
+    } catch (error) {
+        // Handle case where staff with same email already exists
+        if (error.code === 11000) {
+            return res.status(400).json({ message: 'Staff with this email already exists' });
+        }
+        // Log error and return server error
+        console.error('Error adding staff:', error);
+        res.status(500).json({ message: 'Internal Server Error' });
+    }
+});
+
 
   
 // Start server

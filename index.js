@@ -304,10 +304,10 @@ app.get('/api/social_media/follow_stats/:user_id', async (req, res) => {
         const userIdStr = user_id;
 
         // Count the number of people the user is following
-        const followingCount = await database.collection('followers').countDocuments({ follower_id: userIdStr });
+        const followersCount = await database.collection('followers').countDocuments({ follower_id: userIdStr });
 
         // Count the number of people following the user
-        const followersCount = await database.collection('followers').countDocuments({ following_id: userIdStr });
+        const followingCount = await database.collection('followers').countDocuments({ following_id: userIdStr });
 
         console.log('Followers:', followersCount, 'Following:', followingCount);
 
@@ -331,11 +331,11 @@ app.get('/api/social_media/following/:user_id', async (req, res) => {
     }
 
     try {
-        const loggedInUserId = new ObjectId(user_id);
+        const loggedInUserId = user_id;
 
         // Step 1: Find all entries in the 'followers' collection where the 'follower' matches loggedInUserId
         const followedUsers = await database.collection('followers').find({
-            follower: loggedInUserId
+            following_id: loggedInUserId
         }).toArray();
 
         if (followedUsers.length === 0) {
@@ -344,12 +344,12 @@ app.get('/api/social_media/following/:user_id', async (req, res) => {
 
         // Step 2: Extract the user_ids of the users being followed
         const followedUserIds = followedUsers.map(follow => follow.user_id);
-
+        console.log(followedUserIds);
         // Step 3: Retrieve details of the users being followed from the 'user' collection
         const users = await database.collection('user').find({
             _id: { $in: followedUserIds }
         }).toArray();
-
+        console.log("user",users);
         // Return only necessary details
         const result = users.map(user => ({
             id: user._id,
@@ -361,7 +361,7 @@ app.get('/api/social_media/following/:user_id', async (req, res) => {
             profile_pic: user.profile_pic,
             accountPrivacy: user.accountPrivacy
         }));
-
+        console.log("result",result);
         res.status(200).json({ users: result });
     } catch (error) {
         console.error("Error fetching following users:", error);
@@ -832,41 +832,49 @@ app.get('/api/social_media//admin', async (req, res) => {
 });
   //addstaff
 // Define staff schema and model
-const staffSchema = new mongoose.Schema({
-    name: { type: String, required: true },
-    email: { type: String, required: true, unique: true },
-    department: { type: String, required: true },
-    mobile: { type: String, required: true }
-});
-
-const Staff = mongoose.model('Staff', staffSchema);
-
-// POST route to add staff
 app.post('/api/social_media/admin/addstaff', async (req, res) => {
     const { name, email, department, mobile } = req.body;
 
-    // Validation to ensure all fields are filled
+    // Debugging log to check the received data
+    console.log('Received staff data:', req.body);
+
+    // Validate request body (ensure no field is empty)
     if (!name || !email || !department || !mobile) {
+        console.error('Validation Error: All fields are required');
         return res.status(400).json({ message: 'All fields are required' });
     }
 
     try {
-        // Create and save new staff entry
-        const newStaff = new Staff({ name, email, department, mobile });
-        const savedStaff = await newStaff.save();
-
-        // Send success message after saving
-        res.status(201).json({ message: 'Staff added successfully!', staff: savedStaff });
-    } catch (error) {
-        // Handle case where staff with same email already exists
-        if (error.code === 11000) {
-            return res.status(400).json({ message: 'Staff with this email already exists' });
+        // Check if a staff member with the same email or mobile already exists
+        const existingStaff = await database.collection("staff").findOne({ 
+            $or: [{ email }, { mobile }] 
+        });
+        if (existingStaff) {
+            console.error('Error: Staff member with this email or mobile already exists');
+            return res.status(400).json({ message: 'Staff member with this email or mobile already exists' });
         }
-        // Log error and return server error
+
+        // Create a new staff object
+        const newStaff = {
+            name,
+            email,
+            department,
+            mobile,
+            addedAt: new Date() // Store the time the staff was added
+        };
+
+        // Insert the new staff into the database
+        await database.collection("staff").insertOne(newStaff);
+        console.log('Staff added:', newStaff); // Log the newly created staff
+
+        // Return a success response with the added staff data
+        res.status(201).json({ message: 'Staff added successfully', staff: newStaff });
+    } catch (error) {
         console.error('Error adding staff:', error);
-        res.status(500).json({ message: 'Internal Server Error' });
+        res.status(500).json({ message: 'Internal server error' });
     }
 });
+
 
 
   

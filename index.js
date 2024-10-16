@@ -260,17 +260,17 @@ app.get('/api/social_media/search', async (req, res) => {
 
 app.post('/api/social_media/follow', async (req, res) => {
     try {
-        const { follower, user_id } = req.body;
+        const { follower_id, following_id } = req.body;
 
         // Input validation
-        if (!follower || !user_id) {
+        if (!follower_id || !following_id) {
             return res.status(400).json({ message: "follower and user_id are required" });
         }
 
         // Check if the user is already following the other user
         const existingFollow = await database.collection("followers").findOne({
-            user_id,
-            follower
+            follower_id,
+            following_id
         });
 
         if (existingFollow) {
@@ -279,8 +279,8 @@ app.post('/api/social_media/follow', async (req, res) => {
 
         // Insert the follow data into the database
         const result = await database.collection("followers").insertOne({
-            user_id,
-            follower
+            follower_id,
+            following_id
         });
 
         res.status(201).json({ message: "following", result });
@@ -300,20 +300,14 @@ app.get('/api/social_media/follow_stats/:user_id', async (req, res) => {
     console.log('User ID:', user_id);
 
     try {
-        // Check if user_id is a valid 24-character hex string before converting
-        if (!ObjectId.isValid(user_id)) {
-            return res.status(400).json({ message: 'Invalid user ID' });
-        }
+        // Don't convert user_id to ObjectId since it's stored as a string
+        const userIdStr = user_id;
 
-        // Convert to ObjectId if valid
-        const userObjectId = new ObjectId(user_id);
-
-        // Ensure the field names and types match your MongoDB collection
         // Count the number of people the user is following
-        const followingCount = await database.collection('followers').countDocuments({ follower: userObjectId });
+        const followingCount = await database.collection('followers').countDocuments({ follower_id: userIdStr });
 
         // Count the number of people following the user
-        const followersCount = await database.collection('followers').countDocuments({ user_id: userObjectId });
+        const followersCount = await database.collection('followers').countDocuments({ following_id: userIdStr });
 
         console.log('Followers:', followersCount, 'Following:', followingCount);
 
@@ -326,6 +320,8 @@ app.get('/api/social_media/follow_stats/:user_id', async (req, res) => {
         res.status(500).json({ message: "Internal server error" });
     }
 });
+
+
 
 app.get('/api/social_media/following/:user_id', async (req, res) => {
     const { user_id } = req.params;

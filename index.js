@@ -304,10 +304,10 @@ app.get('/api/social_media/follow_stats/:user_id', async (req, res) => {
         const userIdStr = user_id;
 
         // Count the number of people the user is following
-        const followingCount = await database.collection('followers').countDocuments({ follower_id: userIdStr });
+        const followersCount = await database.collection('followers').countDocuments({ follower_id: userIdStr });
 
         // Count the number of people following the user
-        const followersCount = await database.collection('followers').countDocuments({ following_id: userIdStr });
+        const followingCount = await database.collection('followers').countDocuments({ following_id: userIdStr });
 
         console.log('Followers:', followersCount, 'Following:', followingCount);
 
@@ -331,11 +331,11 @@ app.get('/api/social_media/following/:user_id', async (req, res) => {
     }
 
     try {
-        const loggedInUserId = new ObjectId(user_id);
+        const loggedInUserId = user_id;
 
         // Step 1: Find all entries in the 'followers' collection where the 'follower' matches loggedInUserId
         const followedUsers = await database.collection('followers').find({
-            follower: loggedInUserId
+            following_id: loggedInUserId
         }).toArray();
 
         if (followedUsers.length === 0) {
@@ -344,12 +344,12 @@ app.get('/api/social_media/following/:user_id', async (req, res) => {
 
         // Step 2: Extract the user_ids of the users being followed
         const followedUserIds = followedUsers.map(follow => follow.user_id);
-
+        console.log(followedUserIds);
         // Step 3: Retrieve details of the users being followed from the 'user' collection
         const users = await database.collection('user').find({
             _id: { $in: followedUserIds }
         }).toArray();
-
+        console.log("user",users);
         // Return only necessary details
         const result = users.map(user => ({
             id: user._id,
@@ -361,7 +361,7 @@ app.get('/api/social_media/following/:user_id', async (req, res) => {
             profile_pic: user.profile_pic,
             accountPrivacy: user.accountPrivacy
         }));
-
+        console.log("result",result);
         res.status(200).json({ users: result });
     } catch (error) {
         console.error("Error fetching following users:", error);

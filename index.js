@@ -889,27 +889,32 @@ app.post('/api/social_media/admin/addstaff', async (req, res) => {
     console.log("Server is running on port 5038");
     connecttomongodb();
 });
+const WebSocket = require('ws');
+// const http = require('http');
 
-const wss = new WebSocketServer({server})
 
-wss.on("connection", (ws) => {
-    console.log("New client connected");
-  
-    // Listen for incoming messages from clients
-    ws.on("message", (data) => {
-      console.log("Received: %s", data);
-  
-      // Broadcast the message to all connected clients
-      wss.clients.forEach(client => {
-        if (client.readyState === WebSocket.OPEN) {
-          client.send(data);
-        }
-      });
-    });
-  
-    // Handle when a client disconnects
-    ws.on("close", () => {
-      console.log("Client disconnected");
+
+
+// Create WebSocket server
+const wss = new WebSocket.Server({ server });
+
+wss.on('connection', (ws) => {
+  console.log('New client connected');
+
+  // Listen for incoming messages from clients
+  ws.on('message', (data) => {
+    console.log('Received: %s', data);
+
+    // Broadcast the message to all connected clients
+    wss.clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(data);
+      }
     });
   });
-  
+
+  // Handle when a client disconnects
+  ws.on('close', () => {
+    console.log('Client disconnected');
+  });
+});

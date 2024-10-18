@@ -296,6 +296,45 @@ app.post('/api/social_media/follow', async (req, res) => {
     }
 });
  
+app.post('/api/social_media/unfollow', async (req, res) => {
+    try {
+        const { follower_id, following_id } = req.body;
+
+        // Input validation
+        if (!follower_id || !following_id) {
+            return res.status(400).json({ message: "follower and user_id are required" });
+        }
+
+        // Check if the user is actually following the other user
+        const existingFollow = await database.collection("followers").findOne({
+            follower_id,
+            following_id
+        });
+
+        if (!existingFollow) {
+            return res.status(400).json({ message: "You are not following this user." });
+        }
+
+        // Remove the follow data from the database
+        const result = await database.collection("followers").deleteOne({
+            follower_id,
+            following_id
+        });
+
+        if (result.deletedCount === 1) {
+            res.status(200).json({ message: "Successfully unfollowed" });
+        } else {
+            res.status(500).json({ message: "Failed to unfollow. Please try again." });
+        }
+    } catch (error) {
+        console.error("Error unfollowing user:", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
+});
+
+
+
+
 app.get('/api/social_media/follow_stats/:user_id', async (req, res) => {
     const { user_id } = req.params;
     console.log('User ID:', user_id);
@@ -947,6 +986,25 @@ app.post('/api/social_media/admin/addstaff', async (req, res) => {
     }
 });
 
+app.get('/api/social_media/messages/:sender_id/:receiver_id', async (req, res) => {
+    const { sender_id, receiver_id } = req.params;
+
+    try {
+        const messages = await database.collection('messages').find({
+            $or: [
+                { sender_id, receiver_id },
+                { sender_id: receiver_id, receiver_id: sender_id }  // For both directions
+            ]
+        }).toArray();
+
+        res.json({ messages });
+    } catch (error) {
+        console.error('Error fetching messages:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+
 
 
   
@@ -970,23 +1028,47 @@ const WebSocket = require('ws');
 // Create WebSocket server
 const wss = new WebSocket.Server({ server });
 
-wss.on('connection', (ws) => {
-  console.log('New client connected');
+wss.on('connection', ws => {
+    console.log('New client connected');
+    
+    ws.on('message', async data => {
+        const parsedData = JSON.parse(data);
+        const { sender_id, receiver_id, message } = parsedData;
 
-  // Listen for incoming messages from clients
-  ws.on('message', (data) => {
-    console.log('Received: %s', data);
+        try {
+            // Check if sender is following the receiver
+            const followStatus = await database.collection('followers').findOne({
+                follower_id: sender_id,
+                following_id: receiver_id
+            });
 
-    // Broadcast the message to all connected clients
-    wss.clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(data);
-      }
+            if (!followStatus) {
+                ws.send('You are not following this user.');
+                return;
+            }
+
+            console.log('Message received:', message);
+            
+            // Send the message to the receiver
+            // Here you could broadcast the message to all or target only specific clients
+            ws.send(`Message to ${receiver_id}: ${message}`);
+
+            // Optionally store messages in the database for retrieval
+            await database.collection('messages').insertOne({
+                sender_id,
+                receiver_id,
+                message,
+                timestamp: new Date()
+            });
+
+        } catch (error) {
+            console.error('Error handling message:', error);
+            ws.send('Error processing your message.');
+        }
     });
-  });
 
-  // Handle when a client disconnects
-  ws.on('close', () => {
-    console.log('Client disconnected');
-  });
+    ws.on('close', () => {
+        console.log('Client disconnected');
+    });
 });
+

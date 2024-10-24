@@ -691,6 +691,9 @@ app.delete('/api/social_media/admin/deletestudent/:studentId', async (req, res) 
     }
 });
 
+  
+    
+  
 
 // Middleware for admin authentication
 const adminAuth = (req, res, next) => {
@@ -778,7 +781,7 @@ app.post('/api/social_media/admin/addstudent', async (req, res) => {
 });
 
 // GET route to fetch all admins
-app.get('/api/social_media//admin', async (req, res) => {
+app.get('/api/social_media/admin', async (req, res) => {
     try {
       const admins = await Admin.find(); // Fetch all admins from the database
       if (admins.length === 0) {

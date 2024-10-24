@@ -1,5 +1,5 @@
 
-const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const { MongoClient, ServerApiVersion } = require('mongodb');
 const Express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -10,6 +10,7 @@ const multer = require('multer');
 const http = require('http'); // Import http module
 const app = Express();
 const { Server } = require("socket.io");
+const { ObjectId } = require('mongodb');
 // import { WebSocketServer } from 'ws';
 const WebSocketServer = require('ws').WebSocketServer;
 
@@ -295,6 +296,45 @@ app.post('/api/social_media/follow', async (req, res) => {
     }
 });
  
+app.post('/api/social_media/unfollow', async (req, res) => {
+    try {
+        const { follower_id, following_id } = req.body;
+
+        // Input validation
+        if (!follower_id || !following_id) {
+            return res.status(400).json({ message: "follower and user_id are required" });
+        }
+
+        // Check if the user is actually following the other user
+        const existingFollow = await database.collection("followers").findOne({
+            follower_id,
+            following_id
+        });
+
+        if (!existingFollow) {
+            return res.status(400).json({ message: "You are not following this user." });
+        }
+
+        // Remove the follow data from the database
+        const result = await database.collection("followers").deleteOne({
+            follower_id,
+            following_id
+        });
+
+        if (result.deletedCount === 1) {
+            res.status(200).json({ message: "Successfully unfollowed" });
+        } else {
+            res.status(500).json({ message: "Failed to unfollow. Please try again." });
+        }
+    } catch (error) {
+        console.error("Error unfollowing user:", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
+});
+
+
+
+
 app.get('/api/social_media/follow_stats/:user_id', async (req, res) => {
     const { user_id } = req.params;
     console.log('User ID:', user_id);
@@ -333,24 +373,34 @@ app.get('/api/social_media/following/:user_id', async (req, res) => {
     try {
         const loggedInUserId = user_id;
 
-        // Step 1: Find all entries in the 'followers' collection where the 'follower' matches loggedInUserId
+        // Step 1: Find all entries in 'followers' collection where 'follower' matches loggedInUserId
         const followedUsers = await database.collection('followers').find({
             following_id: loggedInUserId
         }).toArray();
+        console.log("followedUsers",followedUsers);
 
         if (followedUsers.length === 0) {
             return res.status(404).json({ message: "You are not following anyone." });
         }
 
         // Step 2: Extract the user_ids of the users being followed
-        const followedUserIds = followedUsers.map(follow => follow.user_id);
-        console.log(followedUserIds);
-        // Step 3: Retrieve details of the users being followed from the 'user' collection
+        const followedUserIds = followedUsers.map(follow => follow.follower_id);
+
+        // Step 3: Ensure proper conversion to ObjectId if needed
+        const followedObjectIds = followedUserIds.map(id => ObjectId.isValid(id) ? new ObjectId(id) : null).filter(Boolean);
+
+        // Step 4: Retrieve details of the users being followed from the 'user' collection
         const users = await database.collection('user').find({
-            _id: { $in: followedUserIds }
+            _id: { $in: followedObjectIds }
         }).toArray();
-        console.log("user",users);
-        // Return only necessary details
+        console.log("followedObjectIds",followedObjectIds);
+
+        // If no users are found, return an empty array
+        if (users.length === 0) {
+            return res.status(404).json({ message: "No users found." });
+        }
+
+        // Return necessary user details
         const result = users.map(user => ({
             id: user._id,
             username: user.username,
@@ -362,12 +412,73 @@ app.get('/api/social_media/following/:user_id', async (req, res) => {
             accountPrivacy: user.accountPrivacy
         }));
         console.log("result",result);
+
         res.status(200).json({ users: result });
     } catch (error) {
         console.error("Error fetching following users:", error);
         res.status(500).json({ message: "Internal server error", error });
     }
 });
+
+
+app.get('/api/social_media/follower/:user_id', async (req, res) => {
+    const { user_id } = req.params;
+
+    if (!ObjectId.isValid(user_id)) {
+        return res.status(400).json({ message: "Invalid user ID" });
+    }
+
+    try {
+        const loggedInUserId = user_id;
+
+        // Step 1: Find all entries in 'followers' collection where 'follower' matches loggedInUserId
+        const followedUsers = await database.collection('followers').find({
+            follower_id: loggedInUserId
+        }).toArray();
+        console.log("followedUsers",followedUsers);
+
+        if (followedUsers.length === 0) {
+            return res.status(404).json({ message: "You are not following anyone." });
+        }
+
+        // Step 2: Extract the user_ids of the users being followed
+        const followedUserIds = followedUsers.map(follow => follow.following_id);
+
+        // Step 3: Ensure proper conversion to ObjectId if needed
+        const followedObjectIds = followedUserIds.map(id => ObjectId.isValid(id) ? new ObjectId(id) : null).filter(Boolean);
+
+        // Step 4: Retrieve details of the users being followed from the 'user' collection
+        const users = await database.collection('user').find({
+            _id: { $in: followedObjectIds }
+        }).toArray();
+        console.log("followedObjectIds",followedObjectIds);
+
+        // If no users are found, return an empty array
+        if (users.length === 0) {
+            return res.status(404).json({ message: "No users found." });
+        }
+
+        // Return necessary user details
+        const result = users.map(user => ({
+            id: user._id,
+            username: user.username,
+            fullName: user.fullName,
+            bio: user.bio,
+            gender: user.gender,
+            dateOfBirth: user.dateOfBirth,
+            profile_pic: user.profile_pic,
+            accountPrivacy: user.accountPrivacy
+        }));
+        console.log("result",result);
+
+        res.status(200).json({ users: result });
+    } catch (error) {
+        console.error("Error fetching following users:", error);
+        res.status(500).json({ message: "Internal server error", error });
+    }
+});
+
+
 
 
 
@@ -878,6 +989,25 @@ app.post('/api/social_media/admin/addstaff', async (req, res) => {
     }
 });
 
+app.get('/api/social_media/messages/:sender_id/:receiver_id', async (req, res) => {
+    const { sender_id, receiver_id } = req.params;
+
+    try {
+        const messages = await database.collection('messages').find({
+            $or: [
+                { sender_id, receiver_id },
+                { sender_id: receiver_id, receiver_id: sender_id }  // For both directions
+            ]
+        }).toArray();
+
+        res.json({ messages });
+    } catch (error) {
+        console.error('Error fetching messages:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+
 
 
   
@@ -892,27 +1022,56 @@ app.post('/api/social_media/admin/addstaff', async (req, res) => {
     console.log("Server is running on port 5038");
     connecttomongodb();
 });
+const WebSocket = require('ws');
+// const http = require('http');
 
-const wss = new WebSocketServer({server})
 
-wss.on("connection", (ws) => {
-    console.log("New client connected");
-  
-    // Listen for incoming messages from clients
-    ws.on("message", (data) => {
-      console.log("Received: %s", data);
-  
-      // Broadcast the message to all connected clients
-      wss.clients.forEach(client => {
-        if (client.readyState === WebSocket.OPEN) {
-          client.send(data);
+
+
+// Create WebSocket server
+const wss = new WebSocket.Server({ server });
+
+wss.on('connection', ws => {
+    console.log('New client connected');
+    
+    ws.on('message', async data => {
+        const parsedData = JSON.parse(data);
+        const { sender_id, receiver_id, message } = parsedData;
+
+        try {
+            // Check if sender is following the receiver
+            const followStatus = await database.collection('followers').findOne({
+                follower_id: sender_id,
+                following_id: receiver_id
+            });
+
+            if (!followStatus) {
+                ws.send('You are not following this user.');
+                return;
+            }
+
+            console.log('Message received:', message);
+            
+            // Send the message to the receiver
+            // Here you could broadcast the message to all or target only specific clients
+            ws.send(`Message to ${receiver_id}: ${message}`);
+
+            // Optionally store messages in the database for retrieval
+            await database.collection('messages').insertOne({
+                sender_id,
+                receiver_id,
+                message,
+                timestamp: new Date()
+            });
+
+        } catch (error) {
+            console.error('Error handling message:', error);
+            ws.send('Error processing your message.');
         }
-      });
     });
-  
-    // Handle when a client disconnects
-    ws.on("close", () => {
-      console.log("Client disconnected");
+
+    ws.on('close', () => {
+        console.log('Client disconnected');
     });
-  });
-  
+});
+

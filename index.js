@@ -1054,7 +1054,7 @@ wss.on('connection', ws => {
             
             // Send the message to the receiver
             // Here you could broadcast the message to all or target only specific clients
-            ws.send(`Message to ${receiver_id}: ${message}`);
+            ws.send(` ${message}`);
 
             // Optionally store messages in the database for retrieval
             await database.collection('messages').insertOne({

@@ -479,6 +479,62 @@ app.get('/api/social_media/follower/:user_id', async (req, res) => {
 });
 
 
+//suggestion API
+app.get('/api/social_media/suggestions/:user_id', async (req, res) => {
+    const { user_id } = req.params;
+    console.log(user_id);
+
+    if (!ObjectId.isValid(user_id)) {
+        console.log(user_id);
+        return res.status(400).json({ message: "Invalid user ID" });
+    }
+
+    try {
+        const loggedInUserId = new ObjectId(user_id);
+
+        // Step 1: Find users the logged-in user is following
+        const followingUsers = await database.collection('followers').find({
+            following_id: loggedInUserId
+        }).toArray();
+        console.log(followingUsers);
+        const followingUserIds = followingUsers.map(follow => new ObjectId(follow.follower_id));
+    
+        // Step 2: Find users who are followed by the users the logged-in user follows
+        const suggestions = await database.collection('followers').find({
+            following_id: { $in: followingUserIds }
+        }).toArray();
+        console.log(suggestions);
+        
+        const suggestedUserIds = suggestions
+            .map(suggest => suggest.follower_id)
+            .filter(id => !followingUserIds.includes(id) && !id.equals(loggedInUserId));  // Exclude users already followed or the user themself
+        console.log("suggestedUsers",suggestedUserIds);
+        // Step 3: Retrieve details of suggested users
+        const suggestedUsers = await database.collection('user').find({
+            _id: { $in: suggestedUserIds }
+        }).toArray();
+
+        // Return necessary user details
+        const result = suggestedUsers.map(user => ({
+            id: user._id,
+            username: user.username,
+            fullName: user.fullName,
+            bio: user.bio,
+            gender: user.gender,
+            dateOfBirth: user.dateOfBirth,
+            profile_pic: user.profile_pic,
+            accountPrivacy: user.accountPrivacy
+        }));
+        
+        res.status(200).json({ suggestedUsers: result });
+    } catch (error) {
+        console.error("Error fetching suggested users:", error);
+        res.status(500).json({ message: "Internal server error", error });
+    }
+});
+
+
+
 
 
 
@@ -599,7 +655,7 @@ app.get('/api/social_media/posts', async (req, res) => {
     }));
     
     // Log for debugging
-    console.log(postsWithUserDetails);
+    // console.log(postsWithUserDetails);
 
     // Send the combined result as the response
     res.status(200).json(postsWithUserDetails);

@@ -1046,7 +1046,7 @@ wss.on('connection', ws => {
             });
 
             if (!followStatus) {
-                ws.send('You are not following this user.');
+                ws.send('This user is not following you,you can not send message to this account.');
                 return;
             }
 

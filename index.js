@@ -1102,7 +1102,7 @@ wss.on('connection', ws => {
             });
 
             if (!followStatus) {
-                ws.send('You are not following this user.');
+                ws.send('This user is not following you,you can not send message to this account.');
                 return;
             }
 
@@ -1110,7 +1110,7 @@ wss.on('connection', ws => {
             
             // Send the message to the receiver
             // Here you could broadcast the message to all or target only specific clients
-            ws.send(`Message to ${receiver_id}: ${message}`);
+            ws.send(` ${message}`);
 
             // Optionally store messages in the database for retrieval
             await database.collection('messages').insertOne({

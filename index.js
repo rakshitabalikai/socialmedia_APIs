@@ -631,9 +631,10 @@ app.post('/api/social_media/uploadstory', async (req, res) => {
 // Fetch posts
 app.get('/api/social_media/posts', async (req, res) => {
   try {
+    console.log("fetch posts")
     // Fetch the posts from the 'posts' collection
     const posts = await database.collection('posts').find({}).toArray();
-
+    console.log("posts",posts);
     // Use Promise.all to fetch the user details for each post
     const postsWithUserDetails = await Promise.all(posts.map(async (post) => {
       // Convert the user_id from the post to ObjectId
@@ -653,7 +654,7 @@ app.get('/api/social_media/posts', async (req, res) => {
     }));
     
     // Log for debugging
-    // console.log(postsWithUserDetails);
+    console.log(postsWithUserDetails);
 
     // Send the combined result as the response
     res.status(200).json(postsWithUserDetails);

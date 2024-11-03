@@ -273,7 +273,7 @@ app.post('/api/social_media/follow', async (req, res) => {
 
         // Input validation
         if (!follower_id || !following_id) {
-            return res.status(400).json({ message: "follower and user_id are required" });
+            return res.status(400).json({ message: "follower_id and following_id are required" });
         }
 
         // Check if the user is already following the other user
@@ -292,10 +292,44 @@ app.post('/api/social_media/follow', async (req, res) => {
             following_id
         });
 
-        res.status(201).json({ message: "following", result });
+        // Fetch follower's user data (username and profile_pic)
+        const follower = await database.collection("user").findOne(
+            { _id: new ObjectId(following_id) },
+            { projection: { username: 1, profile_pic: 1 } }
+        );
+
+        // Construct a follow notification with follower details
+        const notification = {
+            userId:follower_id, // The user receiving the notification
+            senderId:following_id , // The user who initiated the follow
+            type: "follow",
+            message: `${follower.username} started following you!`,
+            profile_pic: follower.profile_pic, // Follower's profile picture
+            isRead: false,
+            timestamp: new Date()
+        };
+
+        // Insert the notification into the notifications collection
+        await database.collection("notification").insertOne(notification);
+
+        // Send real-time notification to the user being followed if they are connected
+        if (activeConnections[following_id]) {
+            activeConnections[following_id].forEach(receiverWs => {
+                receiverWs.send(JSON.stringify({
+                    type: "notification",
+                    data: {
+                        sender_id: follower_id,
+                        message: `${follower.username} started following you!`,
+                        profile_pic: follower.profile_pic,
+                        timestamp: new Date()
+                    }
+                }));
+            });
+        }
+
+        res.status(201).json({ message: "Successfully followed", result });
     } catch (error) {
         if (error.code === 11000) {
-            // Handle unique index violation
             return res.status(400).json({ message: "You are already following this user." });
         }
 
@@ -303,6 +337,7 @@ app.post('/api/social_media/follow', async (req, res) => {
         res.status(500).json({ message: "Internal server error" });
     }
 });
+
  
 app.post('/api/social_media/unfollow', async (req, res) => {
     try {
@@ -310,7 +345,7 @@ app.post('/api/social_media/unfollow', async (req, res) => {
 
         // Input validation
         if (!follower_id || !following_id) {
-            return res.status(400).json({ message: "follower and user_id are required" });
+            return res.status(400).json({ message: "follower_id and following_id are required" });
         }
 
         // Check if the user is actually following the other user
@@ -330,6 +365,41 @@ app.post('/api/social_media/unfollow', async (req, res) => {
         });
 
         if (result.deletedCount === 1) {
+            // Fetch unfollower's user data (username and profile_pic)
+            const unfollower = await database.collection("user").findOne(
+                { _id: new ObjectId(following_id) },
+                { projection: { username: 1, profile_pic: 1 } }
+            );
+
+            // Construct an unfollow notification with unfollower details
+            const notification = {
+                userId: follower_id, // The user receiving the notification
+                senderId:following_id, // The user who initiated the unfollow
+                type: "unfollow",
+                message: `${unfollower.username} unfollowed you.`,
+                profile_pic: unfollower.profile_pic, // Unfollower's profile picture
+                isRead: false,
+                timestamp: new Date()
+            };
+
+            // Insert the notification into the notifications collection
+            await database.collection("notification").insertOne(notification);
+
+            // Send real-time notification to the user being unfollowed if they are connected
+            if (activeConnections[following_id]) {
+                activeConnections[following_id].forEach(receiverWs => {
+                    receiverWs.send(JSON.stringify({
+                        type: "notification",
+                        data: {
+                            sender_id: follower_id,
+                            message: `${unfollower.username} unfollowed you.`,
+                            profile_pic: unfollower.profile_pic,
+                            timestamp: new Date()
+                        }
+                    }));
+                });
+            }
+
             res.status(200).json({ message: "Successfully unfollowed" });
         } else {
             res.status(500).json({ message: "Failed to unfollow. Please try again." });
@@ -1224,12 +1294,40 @@ wss.on('connection', ws => {
                 });
             }
 
+            // Insert the message into the database
             await database.collection('messages').insertOne({
                 sender_id,
                 receiver_id,
                 message,
                 timestamp: new Date()
             });
+
+            // Add notification for the receiver
+            const notification = {
+                userId: receiver_id, // The user receiving the notification
+                senderId: sender_id, // The user who sent the message
+                type: "message",
+                message: "You have a new message",
+                isRead: false,
+                timestamp: new Date()
+            };
+
+            // Insert the notification into the notifications collection
+            await database.collection("notification").insertOne(notification);
+
+            // Send real-time notification to receiver if connected
+            if (activeConnections[receiver_id]) {
+                activeConnections[receiver_id].forEach(receiverWs => {
+                    receiverWs.send(JSON.stringify({
+                        type: "notification",
+                        data: {
+                            sender_id,
+                            message: "You have a new message",
+                            timestamp: new Date()
+                        }
+                    }));
+                });
+            }
 
         } catch (error) {
             console.error('Error handling message:', error);

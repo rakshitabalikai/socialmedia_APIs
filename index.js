@@ -728,25 +728,27 @@ app.get('/api/social_media/posts/videos', async (req, res) => {
       // Fetch only video posts from the 'posts' collection
       const videoPosts = await database.collection('posts').find({ mediaType: 'video' }).toArray();
   
-      // Use Promise.all to fetch user details for each video post
+      // Use Promise.all to fetch user details and construct file URLs for each video post
       const videoPostsWithUserDetails = await Promise.all(videoPosts.map(async (post) => {
+        // Fetch user details
         const user = await database.collection('user').findOne(
           { _id: new ObjectId(post.user_id) },
           { projection: { username: 1, profile_pic: 1 } }
         );
   
-        // Combine the post data with the user data
+        // Construct file URL using the post's fileId
+        const fileUrl = `/api/social_media/file/${post.fileId}`;
+  
+        // Combine the post data with the user data and file URL
         return {
           ...post,
           user: {
-            username: user?.username || 'Unknown',
-            profile_pic: user?.profile_pic || 'default-pic-url'
-          }
+            username: user?.username || 'Unknown', // Default to 'Unknown' if user not found
+            profile_pic: user?.profile_pic || 'default-pic-url' // Default profile pic if not available
+          },
+          fileUrl // URL to access the video file from GridFS
         };
       }));
-  
-      // Log for debugging
-      console.log(videoPostsWithUserDetails);
   
       // Send the combined result as the response
       res.status(200).json(videoPostsWithUserDetails);

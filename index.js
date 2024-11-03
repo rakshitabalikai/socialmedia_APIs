@@ -1,5 +1,5 @@
 
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion,GridFSBucket } = require('mongodb');
 const Express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -11,9 +11,11 @@ const http = require('http'); // Import http module
 const app = Express();
 const { Server } = require("socket.io");
 const { ObjectId } = require('mongodb');
+const gridfsStream = require('gridfs-stream');
 // import { WebSocketServer } from 'ws';
 const WebSocketServer = require('ws').WebSocketServer;
-
+let gfs; // Global variable for GridFS Stream
+let gridfsBucket; // GridFSBucket for file storage
 
 // Create an HTTP server
 // Initialize socket.io with the HTTP server
@@ -54,6 +56,12 @@ async function connecttomongodb() {
         });
         await client.connect();
         database = client.db(databasename);
+        
+        // Initialize GridFS Stream and GridFSBucket
+        gridfsBucket = new GridFSBucket(database, { bucketName: 'uploads' });
+        gfs = gridfsStream(client.db(databasename), mongoose.mongo);
+        gfs.collection('uploads');
+
         console.log("MongoDB connection successful");
     } catch (error) {
         console.error("MongoDB connection failed:", error);
@@ -573,35 +581,58 @@ app.get('/api/social_media/user/:userId', async (req, res) => {
 });
 
 // Post
-app.post('/api/social_media/uploadpost', async (req, res) => {
+app.post('/api/social_media/uploadpost', upload.single('file'), async (req, res) => {
     try {
-        const { user_id, file, caption, type, mediaType } = req.body;
-        console.log(user_id, caption, type, mediaType);
-         
+        const { user_id, caption, type, mediaType } = req.body;
+
         // Input validation
-        if (!file || !caption || type !== 'post' || !mediaType) {
+        if (!req.file || !caption || type !== 'post' || !mediaType) {
             return res.status(400).json({ message: "file, caption, valid type 'post', and mediaType are required" });
         }
         if (!user_id) {
             return res.status(400).json({ message: "login required" });
         }
 
-        // Insert the post data into the database
-        const result = await database.collection("posts").insertOne({
-            user_id,
-            file,
-            caption,
-            type,
-            mediaType, // Add the mediaType field
-            createdAt: new Date(),
+        // Store the file in GridFS
+        const writeStream = gridfsBucket.openUploadStream(req.file.originalname, {
+            metadata: {
+                contentType: req.file.mimetype,
+                user_id,
+                caption,
+                type,
+                mediaType,
+            }
         });
 
-        res.status(201).json({ message: "Post uploaded successfully", result });
+        // Write file data to GridFS
+        writeStream.end(req.file.buffer);
+
+        // Handle the file upload completion
+        writeStream.on('finish', async () => {
+            // Insert the post data with the fileId into the database
+            const result = await database.collection("posts").insertOne({
+                user_id,
+                fileId: writeStream.id,  // Store GridFS fileId reference
+                caption,
+                type,
+                mediaType,
+                createdAt: new Date(),
+            });
+
+            res.status(201).json({ message: "Post uploaded successfully", result });
+        });
+
+        writeStream.on('error', (error) => {
+            console.error("Error uploading file to GridFS:", error);
+            res.status(500).json({ message: "Error uploading file" });
+        });
+
     } catch (error) {
         console.error("Error uploading post:", error);
         res.status(500).json({ message: "Internal server error" });
     }
 });
+
 
 
 app.post('/api/social_media/uploadstory', async (req, res) => {
@@ -632,39 +663,62 @@ app.post('/api/social_media/uploadstory', async (req, res) => {
 
 // Fetch posts
 app.get('/api/social_media/posts', async (req, res) => {
-  try {
-    console.log("fetch posts")
-    // Fetch the posts from the 'posts' collection
-    const posts = await database.collection('posts').find({}).toArray();
-    // console.log("posts",posts);
-    // Use Promise.all to fetch the user details for each post
-    const postsWithUserDetails = await Promise.all(posts.map(async (post) => {
-      // Convert the user_id from the post to ObjectId
-      const user = await database.collection('user').findOne(
-        { _id:new ObjectId(post.user_id) }, // Convert post.user_id to ObjectId
-        { projection: { username: 1, profile_pic: 1 } }
-      );
+    try {
+      console.log("fetch posts");
+  
+      // Fetch the posts from the 'posts' collection
+      const posts = await database.collection('posts').find({}).toArray();
+  
+      // Use Promise.all to fetch the user details and construct file URLs for each post
+      const postsWithUserDetails = await Promise.all(posts.map(async (post) => {
+        // Fetch user details
+        const user = await database.collection('user').findOne(
+          { _id: new ObjectId(post.user_id) }, // Convert post.user_id to ObjectId
+          { projection: { username: 1, profile_pic: 1 } }
+        );
+  
+        // Construct file URL using the post's fileId
+        const fileUrl = `/api/social_media/file/${post.fileId}`;
+  
+        // Combine the post data with the user data and file URL
+        return {
+          ...post,
+          user: {
+            username: user?.username || 'Unknown', // Default to 'Unknown' if user not found
+            profile_pic: user?.profile_pic || 'default-pic-url' // Default profile pic if not available
+          },
+          fileUrl // URL to access the file from GridFS
+        };
+      }));
+  
+      // Send the combined result as the response
+      res.status(200).json(postsWithUserDetails);
+    } catch (error) {
+      console.error('Error fetching posts:', error);
+      res.status(500).json({ message: 'Internal server error' });
+    }
+  });
 
-      // Combine the post data with the user data
-      return {
-        ...post,
-        user: {
-          username: user?.username || 'Unknown', // If user not found, default to 'Unknown'
-          profile_pic: user?.profile_pic || 'default-pic-url' // Default profile pic if not available
-        }
-      };
-    }));
-    
-    // Log for debugging
-    // console.log(postsWithUserDetails);
-
-    // Send the combined result as the response
-    res.status(200).json(postsWithUserDetails);
-  } catch (error) {
-    console.error('Error fetching posts:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-});
+  app.get('/api/social_media/file/:id', async (req, res) => {
+    try {
+      const fileId = new ObjectId(req.params.id);
+  
+      // Find the file in GridFS
+      const file = await database.collection('uploads.files').findOne({ _id: fileId });
+      if (!file) {
+        return res.status(404).json({ message: "File not found" });
+      }
+  
+      // Set the content type and stream the file from GridFS
+      const readStream = gridfsBucket.openDownloadStream(fileId);
+      res.set('Content-Type', file.metadata.contentType);
+      readStream.pipe(res);
+    } catch (error) {
+      console.error("Error fetching file:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+  
 
 // fetch videos
 app.get('/api/social_media/posts/videos', async (req, res) => {

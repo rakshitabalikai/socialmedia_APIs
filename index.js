@@ -334,7 +334,7 @@ app.post('/api/social_media/unfollow', async (req, res) => {
 
 
 
-
+// follow status
 app.get('/api/social_media/follow_stats/:user_id', async (req, res) => {
     const { user_id } = req.params;
     console.log('User ID:', user_id);
@@ -362,7 +362,7 @@ app.get('/api/social_media/follow_stats/:user_id', async (req, res) => {
 });
 
 
-
+// Following
 app.get('/api/social_media/following/:user_id', async (req, res) => {
     const { user_id } = req.params;
 
@@ -421,6 +421,7 @@ app.get('/api/social_media/following/:user_id', async (req, res) => {
 });
 
 
+// Follower
 app.get('/api/social_media/follower/:user_id', async (req, res) => {
     const { user_id } = req.params;
 
@@ -533,10 +534,6 @@ app.get('/api/social_media/suggestions/:user_id', async (req, res) => {
 
 
 
-
-
-
-
 app.get('/api/social_media/user/:userId', async (req, res) => {
     const { userId } = req.params;  // Get userId from the request parameters
 
@@ -575,23 +572,27 @@ app.get('/api/social_media/user/:userId', async (req, res) => {
     }
 });
 
+// Post
 app.post('/api/social_media/uploadpost', async (req, res) => {
     try {
-        const { user_id, file, caption, type } = req.body;
-        console.log(user_id,caption,type);
+        const { user_id, file, caption, type, mediaType } = req.body;
+        console.log(user_id, caption, type, mediaType);
+         
         // Input validation
-        if (!file || !caption || type !== 'post') {
-            return res.status(400).json({ message: "file, caption, and valid type 'post' are required" });
+        if (!file || !caption || type !== 'post' || !mediaType) {
+            return res.status(400).json({ message: "file, caption, valid type 'post', and mediaType are required" });
         }
-        if ( !user_id){
-            return res.status(400).json({message: "login required"});
+        if (!user_id) {
+            return res.status(400).json({ message: "login required" });
         }
+
         // Insert the post data into the database
         const result = await database.collection("posts").insertOne({
             user_id,
             file,
             caption,
             type,
+            mediaType, // Add the mediaType field
             createdAt: new Date(),
         });
 
@@ -601,6 +602,7 @@ app.post('/api/social_media/uploadpost', async (req, res) => {
         res.status(500).json({ message: "Internal server error" });
     }
 });
+
 
 app.post('/api/social_media/uploadstory', async (req, res) => {
     try {
@@ -663,6 +665,43 @@ app.get('/api/social_media/posts', async (req, res) => {
     res.status(500).json({ message: 'Internal server error' });
   }
 });
+
+// fetch videos
+app.get('/api/social_media/posts/videos', async (req, res) => {
+    try {
+      console.log("Fetching video posts");
+  
+      // Fetch only video posts from the 'posts' collection
+      const videoPosts = await database.collection('posts').find({ mediaType: 'video' }).toArray();
+  
+      // Use Promise.all to fetch user details for each video post
+      const videoPostsWithUserDetails = await Promise.all(videoPosts.map(async (post) => {
+        const user = await database.collection('user').findOne(
+          { _id: new ObjectId(post.user_id) },
+          { projection: { username: 1, profile_pic: 1 } }
+        );
+  
+        // Combine the post data with the user data
+        return {
+          ...post,
+          user: {
+            username: user?.username || 'Unknown',
+            profile_pic: user?.profile_pic || 'default-pic-url'
+          }
+        };
+      }));
+  
+      // Log for debugging
+      console.log(videoPostsWithUserDetails);
+  
+      // Send the combined result as the response
+      res.status(200).json(videoPostsWithUserDetails);
+    } catch (error) {
+      console.error("Error fetching video posts:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+  
 
   
 

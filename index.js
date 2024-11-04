@@ -769,6 +769,47 @@ app.get('/api/social_media/posts', async (req, res) => {
     }
   });
 
+
+  //posts of specific user
+  app.get('/api/social_media/user_posts/:userId', async (req, res) => {
+    try {
+      const userId = req.params.userId;
+      console.log("Fetching posts for user:", userId);
+  
+      // Fetch the user's details once
+      const userDetails = await database.collection('user').findOne(
+        { _id: new ObjectId(userId) },
+        { projection: { username: 1, profile_pic: 1 } }
+      );
+  
+      // Fetch posts for the specific user
+      const posts = await database.collection('posts').find({ user_id: userId }).toArray();
+  
+      // Count the number of posts
+      const postCount = posts.length;
+  
+      // Construct file URLs for each post without adding user details
+      const postsWithFileUrls = posts.map((post) => ({
+        ...post,
+        fileUrl: `/api/social_media/file/${post.fileId}` // URL to access the file from GridFS
+      }));
+  
+      // Send the user details, post count, and posts without user details
+      res.status(200).json({ 
+        userDetails: {
+          username: userDetails?.username || 'Unknown',
+          profile_pic: userDetails?.profile_pic || 'default-pic-url'
+        },
+        postCount,
+        posts: postsWithFileUrls
+      });
+    } catch (error) {
+      console.error('Error fetching posts:', error);
+      res.status(500).json({ message: 'Internal server error' });
+    }
+  });
+  
+
   app.get('/api/social_media/file/:id', async (req, res) => {
     try {
       const fileId = new ObjectId(req.params.id);

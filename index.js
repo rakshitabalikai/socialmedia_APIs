@@ -1266,6 +1266,28 @@ app.get('/api/social_media/admin/staff', async (req, res) => {
 });
 
 
+// API endpoint to delete a staff member by ID
+app.delete('/api/social_media/admin/deletestaff/:id', async (req, res) => {
+    const staffId = req.params.id;
+
+    try {
+        // Delete staff member from the database
+        const result = await database.collection("staff").deleteOne({ _id: new ObjectId(staffId) });
+
+        if (result.deletedCount === 0) {
+            return res.status(404).json({ message: 'Staff member not found' });
+        }
+
+        res.status(200).json({ message: 'Staff member deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting staff member:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+
+
+
 app.get('/api/social_media/messages/:sender_id/:receiver_id', async (req, res) => {
     const { sender_id, receiver_id } = req.params;
     console.log("sender",sender_id,"reciver",receiver_id);

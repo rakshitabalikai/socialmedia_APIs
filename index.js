@@ -1209,6 +1209,22 @@ app.post('/api/social_media/admin/addstaff', async (req, res) => {
     }
 });
 
+
+// API endpoint to get all staff members
+app.get('/api/social_media/admin/staff', async (req, res) => {
+    try {
+        // Retrieve all staff entries from the "staff" collection
+        const staff = await database.collection("staff").find().toArray();
+
+        // Return the staff data
+        res.status(200).json({ staff });
+    } catch (error) {
+        console.error('Error fetching staff data:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+
 app.get('/api/social_media/messages/:sender_id/:receiver_id', async (req, res) => {
     const { sender_id, receiver_id } = req.params;
     console.log("sender",sender_id,"reciver",receiver_id);

@@ -1314,7 +1314,22 @@ app.get('/api/social_media/messages/:sender_id/:receiver_id', async (req, res) =
     }
 });
 
+//delete the mesages
+app.post('/api/social_media/messages/delete', async (req, res) => {
+    const { messageIds } = req.body;
+    try {
+      await database.collection('messages').deleteMany({
+        _id: { $in: messageIds.map(id => new ObjectId(id)) }
+      });
+      res.json({ message: 'Messages deleted successfully' });
+    } catch (error) {
+      console.error('Error deleting messages:', error);
+      res.status(500).json({ message: 'Internal server error' });
+    }
+  });
 
+  
+  
 
 
 

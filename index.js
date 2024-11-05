@@ -813,7 +813,7 @@ app.get('/api/social_media/posts', async (req, res) => {
   app.get('/api/social_media/file/:id', async (req, res) => {
     try {
       const fileId = new ObjectId(req.params.id);
-  
+      console.log(fileId);
       // Find the file in GridFS
       const file = await database.collection('uploads.files').findOne({ _id: fileId });
       if (!file) {
@@ -870,7 +870,49 @@ app.get('/api/social_media/posts/videos', async (req, res) => {
   });
   
 
-  
+  //fetch notification
+  app.get('/api/social_media/notifications/:userId', async (req, res) => {
+    const { userId } = req.params;
+    console.log(userId);
+    try {
+        // Aggregate notifications with sender details (username and profile_pic)
+        const notifications = await database.collection("notification").aggregate([
+            { $match: { userId, isRead: false } },  // Fetch only unread notifications; remove isRead to get all
+            { $sort: { timestamp: -1 } },           // Sort by most recent first
+            {
+                $lookup: {
+                    from: "users",                  // Collection name for users
+                    localField: "senderId",
+                    foreignField: "_id",            // Match senderId with _id in the users collection
+                    as: "senderDetails"
+                }
+            },
+            { $unwind: "$senderDetails" },           // Flatten the senderDetails array
+            {
+                $project: {
+                    userId: 1,
+                    senderId: 1,
+                    type: 1,
+                    message: 1,
+                    isRead: 1,
+                    timestamp: 1,
+                    "senderDetails.username": 1,
+                    "senderDetails.profilePic": {
+                        $ifNull: ["$senderDetails.profilePic", "https://via.placeholder.com/150"] // Set default if empty
+                    }
+                }
+            }
+        ]).toArray();
+
+        res.status(200).json({ notifications });
+    } catch (error) {
+        console.error('Error fetching notifications:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+
+
 
   // Fetch stories
   app.get('/api/social_media/stories', async (req, res) => {
@@ -1371,7 +1413,7 @@ app.post('/api/social_media/messages/delete', async (req, res) => {
   });
 
   
-  
+
 
 
 

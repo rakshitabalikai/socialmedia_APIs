@@ -903,7 +903,7 @@ app.get('/api/social_media/posts/videos', async (req, res) => {
                 }
             }
         ]).toArray();
-
+        console.log(notifications);
         res.status(200).json({ notifications });
     } catch (error) {
         console.error('Error fetching notifications:', error);

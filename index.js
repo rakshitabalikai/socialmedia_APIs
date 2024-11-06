@@ -1197,7 +1197,7 @@ app.post('/api/social_media/admin/addstudent', async (req, res) => {
 // GET route to fetch all admins
 app.get('/api/social_media/admin', async (req, res) => {
     try {
-      const admins = await Admin.find(); // Fetch all admins from the database
+      const admins = await database.collection('admins').find().toArray(); // Fetch all admins from the database
       if (admins.length === 0) {
         return res.status(404).json({ message: 'No admins found' });
       }
@@ -1207,46 +1207,47 @@ app.get('/api/social_media/admin', async (req, res) => {
       res.status(500).json({ message: 'Error fetching admin data' });
     }
   });
-
+  
+  // POST route to add a new admin
   app.post('/api/social_media/admin/addadmin', async (req, res) => {
     const { name, email, password, phoneNumber } = req.body;
-
+  
     // Input validation
     if (!name || !email || !password || !phoneNumber) {
-        return res.status(400).json({ message: 'All fields are required' });
+      return res.status(400).json({ message: 'All fields are required' });
     }
-
+  
     try {
-        // Check if admin with the same email or phone number already exists
-        const existingAdmin = await database.collection('admins').findOne({
-            $or: [{ email }, { phone: phoneNumber }]
-        });
-
-        if (existingAdmin) {
-            return res.status(400).json({ message: 'Admin with this email or phone number already exists' });
-        }
-
-        // Ensure strong password hashing
-        const hashedPassword = await bcrypt.hash(password, 10);
-
-        // Create a new admin object
-        const newAdmin = {
-            name,
-            email,
-            password: hashedPassword, // Save hashed password
-            phone: phoneNumber,
-        };
-
-        // Insert the new admin into the database
-        const result = await database.collection('admins').insertOne(newAdmin);
-
-        // Respond with the inserted admin's ID
-        res.status(201).json({ message: 'Admin added successfully', adminId: result.insertedId });
+      // Check if admin with the same email or phone number already exists
+      const existingAdmin = await database.collection('admins').findOne({
+        $or: [{ email }, { phone: phoneNumber }]
+      });
+  
+      if (existingAdmin) {
+        return res.status(400).json({ message: 'Admin with this email or phone number already exists' });
+      }
+  
+      // Ensure strong password hashing
+      const hashedPassword = await bcrypt.hash(password, 10);
+  
+      // Create a new admin object
+      const newAdmin = {
+        name,
+        email,
+        password: hashedPassword, // Save hashed password
+        phone: phoneNumber,
+      };
+  
+      // Insert the new admin into the database
+      const result = await database.collection('admins').insertOne(newAdmin);
+  
+      // Respond with the inserted admin's ID
+      res.status(201).json({ message: 'Admin added successfully', adminId: result.insertedId });
     } catch (error) {
-        console.error('Error adding admin:', error);
-        res.status(500).json({ message: 'Internal server error' });
+      console.error('Error adding admin:', error);
+      res.status(500).json({ message: 'Internal server error' });
     }
-});
+  });
   //addstaff
 // Define staff schema and model
 app.post('/api/social_media/admin/addstaff', async (req, res) => {
@@ -1326,6 +1327,47 @@ app.delete('/api/social_media/admin/deletestaff/:id', async (req, res) => {
         res.status(500).json({ message: 'Internal server error' });
     }
 });
+
+
+// API endpoint to update a staff member by ID
+app.put('/api/social_media/admin/editstaff/:id', async (req, res) => {
+    const staffId = req.params.id;
+    const { name, email, department, mobile } = req.body;
+
+    // Validate request body (ensure no field is empty)
+    if (!name || !email || !department || !mobile) {
+        console.error('Validation Error: All fields are required');
+        return res.status(400).json({ message: 'All fields are required' });
+    }
+
+    try {
+        // Check if another staff member with the same email or mobile already exists
+        const existingStaff = await database.collection("staff").findOne({
+            $or: [{ email }, { mobile }],
+            _id: { $ne: new ObjectId(staffId) }
+        });
+        if (existingStaff) {
+            console.error('Error: Staff member with this email or mobile already exists');
+            return res.status(400).json({ message: 'Staff member with this email or mobile already exists' });
+        }
+
+        // Update the staff member in the database
+        const result = await database.collection("staff").updateOne(
+            { _id: new ObjectId(staffId) },
+            { $set: { name, email, department, mobile } }
+        );
+
+        if (result.matchedCount === 0) {
+            return res.status(404).json({ message: 'Staff member not found' });
+        }
+
+        res.status(200).json({ message: 'Staff updated successfully' });
+    } catch (error) {
+        console.error('Error updating staff member:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
 
 
 

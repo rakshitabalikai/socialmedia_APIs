@@ -17,15 +17,6 @@ const WebSocketServer = require('ws').WebSocketServer;
 let gfs; // Global variable for GridFS Stream
 let gridfsBucket; // GridFSBucket for file storage
 
-// Create an HTTP server
-// Initialize socket.io with the HTTP server
-// const io = new Server(server, {
-//     cors: {
-//         origin: "http://localhost:3000", // Allow your React app to connect
-//         methods: ["GET", "POST"]
-//     }
-// });
-
 // Middleware
 app.use(cors());
 app.use(bodyParser.json({ limit: '200mb' })); // Setting limit to 200MB for JSON bodies
@@ -81,24 +72,6 @@ app.use((err, req, res, next) => {
     }
     next(err);
 });
-
-// io connection
-// io.on("connection", (socket) => {
-//     console.log("A user connected:", socket.id);
-
-//     // Handle socket events, e.g., receiving messages
-//     socket.on('sendMessage', (message) => {
-//         console.log("Message received:", message);
-//         // Broadcast message to all connected clients
-//         io.emit('receiveMessage', message);
-//     });
-
-//     // Handle disconnection
-//     socket.on("disconnect", () => {
-//         console.log("User disconnected:", socket.id);
-//     });
-// });
-
 
 
 // Signup Route (User Registration)

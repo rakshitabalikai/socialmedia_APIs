@@ -756,6 +756,42 @@ app.get('/api/social_media/posts', async (req, res) => {
     }
   });
 
+//block other users
+
+  app.post('/api/social_media/user/blockuser', async (req, res) => {
+    const { blockerId, blockedId } = req.body; // Blocker and blocked user IDs sent in the request body
+    console.log(blockerId,blockedId , "hi");
+    // Input validation
+    if (!blockerId || !blockedId) {
+      return res.status(400).json({ message: 'Both blockerId and blockedId are required' });
+    }
+  
+    try {
+      // Check if the user is already blocked by the blocker
+      const alreadyBlocked = await database.collection('block').findOne({
+        blockerId,
+        blockedId,
+      });
+  
+      if (alreadyBlocked) {
+        return res.status(400).json({ message: 'User already blocked' });
+      }
+  
+      // Insert the block record into the database
+      const result = await database.collection('block').insertOne({
+        blockerId,
+        blockedId,
+        blockedAt: new Date(), // Add a timestamp for when the block occurred
+      });
+  
+      // Respond with a success message
+      res.status(201).json({ message: 'User blocked successfully', blockId: result.insertedId });
+    } catch (error) {
+      console.error('Error blocking user:', error);
+      res.status(500).json({ message: 'Internal server error' });
+    }
+  });
+  
 
   //posts of specific user
   app.get('/api/social_media/user_posts/:userId', async (req, res) => {

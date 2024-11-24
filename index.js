@@ -1213,6 +1213,41 @@ app.post('/api/social_media/Edit_student', async (req, res) => {
 //     console.log(`Server running on port ${PORT}`);
 //   });
   
+
+// POST route to log in as an admin
+app.post('/api/social_media/addadmin/login', async (req, res) => {
+    const { mobileOrEmailOrUsername, password } = req.body;
+  
+    // Input validation
+    if (!mobileOrEmailOrUsername || !password) {
+      return res.status(400).json({ message: 'Both fields are required' });
+    }
+  
+    try {
+      // Find the admin by email or phone number
+      const admin = await database.collection('admins').findOne({
+        $or: [{ email: mobileOrEmailOrUsername }, { phone: mobileOrEmailOrUsername }]
+      });
+  
+      if (!admin) {
+        return res.status(404).json({ message: 'Admin not found' });
+      }
+  
+      // Validate the password (ensure you are storing hashed passwords in production)
+      if (admin.password !== password) {
+        return res.status(401).json({ message: 'Invalid password' });
+      }
+  
+      // Return success response with admin info (avoid sending sensitive data like password)
+      return res.status(200).json({ message: 'Login successful', admin: admin._id });
+  
+    } catch (error) {
+      console.error('Login error:', error);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  });
+  
+
 app.post('/api/social_media/admin/addstudent', async (req, res) => {
     const { name, email, mobile, gender, dateOfBirth, usn } = req.body;
 

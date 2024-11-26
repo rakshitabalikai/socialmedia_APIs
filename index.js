@@ -116,48 +116,62 @@ app.post('/api/social_media/signup', async (req, res) => {
 // Login Route (Authentication)
 app.post('/api/social_media/login', async (req, res) => {
     const { mobileOrEmailOrUsername, password } = req.body;
-
+  
     if (!mobileOrEmailOrUsername || !password) { 
-        return res.status(400).json({ message: "All fields are required" });
+      return res.status(400).json({ message: "All fields are required" });
     }
-
+  
     try {
-        const user = await database.collection("user").findOne({
-            $or: [
-                { username: mobileOrEmailOrUsername },
-                { email: mobileOrEmailOrUsername },
-                { mobile: mobileOrEmailOrUsername }
-            ]
-        });
-
-        if (!user) {
-            return res.status(400).json({ message: "Invalid username, email, or mobile number" });
-        }
-
-        const isPasswordValid = await bcrypt.compare(password, user.password);
-        if (!isPasswordValid) {
-            return res.status(400).json({ message: "Invalid password" });
-        }
-
-        req.session.user = {
-            id: user._id,
-            username: user.username,
-            fullName: user.fullName,
-            bio: user.bio,
-            gender: user.gender,
-            dateOfBirth: user.dateOfBirth,
-            accountPrivacy: user.accountPrivacy,
-            profile_pic: user.profile_pic,
-            email: user.email,
-            mobile: user.mobile
-        };
-
-        res.json({ message: "Login successful", user: req.session.user });
-        console.log(user);
+      // Check if the user exists in the "user" collection
+      const user = await database.collection("user").findOne({
+        $or: [
+          { username: mobileOrEmailOrUsername },
+          { email: mobileOrEmailOrUsername },
+          { mobile: mobileOrEmailOrUsername }
+        ]
+      });
+  
+      if (!user) {
+        return res.status(400).json({ message: "Invalid username, email, or mobile number" });
+      }
+      const userIdString = user._id.toString();
+      // Check if the user is blocked by admin
+      const isBlocked = await database.collection('block').findOne({
+        blockedby: 'admin',
+        blockedId: userIdString
+      });
+  
+      if (isBlocked) {
+        return res.status(403).json({ message: "Your account has been blocked by the admin" });
+      }
+  
+      // Verify the password
+      const isPasswordValid = await bcrypt.compare(password, user.password);
+      if (!isPasswordValid) {
+        return res.status(400).json({ message: "Invalid password" });
+      }
+  
+      // Store user session details
+      req.session.user = {
+        id: user._id,
+        username: user.username,
+        fullName: user.fullName,
+        bio: user.bio,
+        gender: user.gender,
+        dateOfBirth: user.dateOfBirth,
+        accountPrivacy: user.accountPrivacy,
+        profile_pic: user.profile_pic,
+        email: user.email,
+        mobile: user.mobile
+      };
+  
+      res.json({ message: "Login successful", user: req.session.user });
+      console.log(user);
     } catch (error) {
-        res.status(500).json({ message: "Error during login", error });
+      res.status(500).json({ message: "Error during login", error });
     }
-});
+  });
+  
 
 // Endpoint for profile updates with file upload handling
 app.post('/api/social_media/update_profile', async (req, res) => {
@@ -742,6 +756,42 @@ app.get('/api/social_media/posts', async (req, res) => {
     }
   });
 
+//block other users
+
+  app.post('/api/social_media/user/blockuser', async (req, res) => {
+    const { blockerId, blockedId } = req.body; // Blocker and blocked user IDs sent in the request body
+    console.log(blockerId,blockedId , "hi");
+    // Input validation
+    if (!blockerId || !blockedId) {
+      return res.status(400).json({ message: 'Both blockerId and blockedId are required' });
+    }
+  
+    try {
+      // Check if the user is already blocked by the blocker
+      const alreadyBlocked = await database.collection('block').findOne({
+        blockerId,
+        blockedId,
+      });
+  
+      if (alreadyBlocked) {
+        return res.status(400).json({ message: 'User already blocked' });
+      }
+  
+      // Insert the block record into the database
+      const result = await database.collection('block').insertOne({
+        blockerId,
+        blockedId,
+        blockedAt: new Date(), // Add a timestamp for when the block occurred
+      });
+  
+      // Respond with a success message
+      res.status(201).json({ message: 'User blocked successfully', blockId: result.insertedId });
+    } catch (error) {
+      console.error('Error blocking user:', error);
+      res.status(500).json({ message: 'Internal server error' });
+    }
+  });
+  
 
   //posts of specific user
   app.get('/api/social_media/user_posts/:userId', async (req, res) => {
@@ -782,6 +832,27 @@ app.get('/api/social_media/posts', async (req, res) => {
     }
   });
   
+
+  // Like a post
+app.post('/posts/:postId/like', async (req, res) => {
+    const { postId } = req.params;
+    const { userId } = req.body; // Pass the user ID of the person liking the post
+  
+    try {
+      const post = await database.collection('posts').findById(postId);
+  
+      if (!post) {
+        return res.status(404).json({ message: 'Post not found' });
+      }
+  
+      // Toggle like
+      const like = await database.collection('like').findOne()
+      await database.collection("notification").insertOne(notification);
+    } catch (error) {
+      console.error('Error liking post:', error);
+      res.status(500).json({ message: 'Server error' });
+    }
+  });
 
   app.get('/api/social_media/file/:id', async (req, res) => {
     try {
@@ -886,6 +957,56 @@ app.get('/api/social_media/posts/videos', async (req, res) => {
     }
 });
 
+//report user
+app.post('/api/social_media/report', upload.single('file'), async (req, res) => {
+    try {
+        const { reporter_id, reported_user_id, feedback } = req.body;
+
+        // Input validation
+        if (!req.file || !feedback || !reported_user_id) {
+            return res.status(400).json({ message: "file (screenshot), feedback, and reported_user_id are required" });
+        }
+        if (!reporter_id) {
+            return res.status(400).json({ message: "login required" });
+        }
+
+        // Store the file in GridFS
+        const writeStream = gridfsBucket.openUploadStream(req.file.originalname, {
+            metadata: {
+                contentType: req.file.mimetype,
+                reporter_id,
+                reported_user_id,
+                feedback,
+            }
+        });
+
+        // Write file data to GridFS
+        writeStream.end(req.file.buffer);
+
+        // Handle the file upload completion
+        writeStream.on('finish', async () => {
+            // Insert the report data with the fileId into the database
+            const result = await database.collection("reports").insertOne({
+                reporter_id,
+                reported_user_id,
+                fileId: writeStream.id, // Store GridFS fileId reference
+                feedback,
+                createdAt: new Date(),
+            });
+
+            res.status(201).json({ message: "Report submitted successfully", result });
+        });
+
+        writeStream.on('error', (error) => {
+            console.error("Error uploading file to GridFS:", error);
+            res.status(500).json({ message: "Error uploading screenshot" });
+        });
+
+    } catch (error) {
+        console.error("Error reporting user:", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
+});
 
 
 
@@ -957,6 +1078,28 @@ app.get('/api/social_media/admin/users', async (req, res) => {
     }
 });
 
+//fetch all blocked users
+// Fetch blocked users
+app.get('/api/social_media/admin/blocked-users', async (req, res) => {
+    try {
+        // Find all entries in the "block" collection where blockedby is "admin"
+        const blockedUsers = await database.collection("block").find({ blockedby: 'admin' }).toArray();
+
+        // Extract the blocked user IDs
+        const blockedIds = blockedUsers.map(entry => entry.blockedId);
+
+        // Fetch user details for each blocked ID from the "user" collection
+        const users = await database.collection("user").find({ _id: { $in: blockedIds.map(id => new ObjectId(id)) } }).toArray();
+
+        res.json({ users });
+    } catch (error) {
+        console.error('Error fetching blocked users:', error);
+        res.status(500).json({ message: "Error fetching blocked users", error });
+    }
+});
+
+
+
  // Update user data (only passed fields)
 app.put('/api/social_media/admin/user/:userId', async (req, res) => {
     const { userId } = req.params;
@@ -1027,7 +1170,33 @@ app.delete('/api/social_media/admin/deleteuser/:userId', async (req, res) => {
     }
 });
 
-
+app.post('/api/social_media/admin/blockuser/:userId', async (req, res) => {
+    const { userId } = req.params;
+    const blockedId = userId;
+    const blockedby = 'admin';
+    console.log(userId);
+    try {
+      // Check if the user is already blocked by the admin
+      const alreadyBlocked = await database.collection('block').findOne({
+        blockedby,
+        blockedId,
+      });
+  
+      if (alreadyBlocked) {
+        return res.status(400).json({ message: 'User already blocked' });
+      }
+  
+      // Insert the block record into the database
+      const result = await database.collection('block').insertOne({ blockedby, blockedId });
+  
+      // Respond with a success message
+      res.status(201).json({ message: 'User blocked successfully' });
+    } catch (error) {
+      console.error('Error blocking user:', error);
+      res.status(500).json({ message: 'Internal server error' });
+    }
+  });
+  
 
 
 // Update student data (only passed fields)
@@ -1130,6 +1299,45 @@ app.post('/api/social_media/Edit_student', async (req, res) => {
 //     console.log(`Server running on port ${PORT}`);
 //   });
   
+
+// POST route to log in as an admin
+app.post('/api/social_media/addadmin/login', async (req, res) => {
+    console.log('Login attempt:', req.body);
+    const { mobileOrEmailOrUsername, password } = req.body;
+
+    try {
+        const admin = await database.collection('admins').findOne({
+            $or: [
+                { email: mobileOrEmailOrUsername },
+                { phone: mobileOrEmailOrUsername },
+                { username: mobileOrEmailOrUsername },
+            ],
+        });
+
+        if (!admin) {
+            console.log('Admin not found');
+            return res.status(404).json({ message: 'Admin not found' });
+        }
+
+        const isPasswordValid = await bcrypt.compare(password, admin.password);
+        if (!isPasswordValid) {
+            console.log('Invalid password');
+            return res.status(401).json({ message: 'Invalid password' });
+        }
+
+        console.log('Admin logged in:', admin._id);
+        res.status(200).json({
+            message: 'Login successful',
+            admin: { id: admin._id, name: admin.name },
+        });
+    } catch (error) {
+        console.error('Login error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+  
+
 app.post('/api/social_media/admin/addstudent', async (req, res) => {
     const { name, email, mobile, gender, dateOfBirth, usn } = req.body;
 

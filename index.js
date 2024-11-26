@@ -677,7 +677,7 @@ app.post('/api/social_media/uploadpost', upload.single('file'), async (req, res)
 });
 
 
-
+//Fetch story
 app.post('/api/social_media/uploadstory', async (req, res) => {
     try {
         const { user_id,file, caption, type } = req.body;

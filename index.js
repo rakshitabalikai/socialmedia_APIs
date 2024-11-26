@@ -957,6 +957,56 @@ app.get('/api/social_media/posts/videos', async (req, res) => {
     }
 });
 
+//report user
+app.post('/api/social_media/report', upload.single('file'), async (req, res) => {
+    try {
+        const { reporter_id, reported_user_id, feedback } = req.body;
+
+        // Input validation
+        if (!req.file || !feedback || !reported_user_id) {
+            return res.status(400).json({ message: "file (screenshot), feedback, and reported_user_id are required" });
+        }
+        if (!reporter_id) {
+            return res.status(400).json({ message: "login required" });
+        }
+
+        // Store the file in GridFS
+        const writeStream = gridfsBucket.openUploadStream(req.file.originalname, {
+            metadata: {
+                contentType: req.file.mimetype,
+                reporter_id,
+                reported_user_id,
+                feedback,
+            }
+        });
+
+        // Write file data to GridFS
+        writeStream.end(req.file.buffer);
+
+        // Handle the file upload completion
+        writeStream.on('finish', async () => {
+            // Insert the report data with the fileId into the database
+            const result = await database.collection("reports").insertOne({
+                reporter_id,
+                reported_user_id,
+                fileId: writeStream.id, // Store GridFS fileId reference
+                feedback,
+                createdAt: new Date(),
+            });
+
+            res.status(201).json({ message: "Report submitted successfully", result });
+        });
+
+        writeStream.on('error', (error) => {
+            console.error("Error uploading file to GridFS:", error);
+            res.status(500).json({ message: "Error uploading screenshot" });
+        });
+
+    } catch (error) {
+        console.error("Error reporting user:", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
+});
 
 
 

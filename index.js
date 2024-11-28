@@ -1010,6 +1010,56 @@ app.post('/api/social_media/report', upload.single('file'), async (req, res) => 
 
 
 
+//fetch reports
+app.get('/api/social_media/reports', async (req, res) => {
+    try {
+        console.log("Fetching reports");
+
+        // Fetch all reports from the 'reports' collection
+        const reports = await database.collection('reports').find({}).toArray();
+
+        // Use Promise.all to fetch user details and construct file URLs for each report
+        const reportsWithDetails = await Promise.all(reports.map(async (report) => {
+            // Fetch reporter details
+            const reporter = await database.collection('user').findOne(
+                { _id: new ObjectId(report.reporter_id) },
+                { projection: { username: 1, profile_pic: 1 } }
+            );
+
+            // Fetch reported user details
+            const reportedUser = await database.collection('user').findOne(
+                { _id: new ObjectId(report.reported_user_id) },
+                { projection: { username: 1, profile_pic: 1 } }
+            );
+
+            // Construct file URL using the report's fileId
+            const fileUrl = `/api/social_media/file/${report.fileId}`;
+
+            // Combine the report data with user details and file URL
+            return {
+                ...report,
+                reporter: {
+                    username: reporter?.username || 'Unknown', // Default to 'Unknown' if user not found
+                    profile_pic: reporter?.profile_pic || 'default-reporter-pic-url' // Default reporter profile pic
+                },
+                reported_user: {
+                    username: reportedUser?.username || 'Unknown', // Default to 'Unknown' if user not found
+                    profile_pic: reportedUser?.profile_pic || 'default-reported-user-pic-url' // Default reported user profile pic
+                },
+                fileUrl // URL to access the screenshot file from GridFS
+            };
+        }));
+
+        // Send the combined result as the response
+        res.status(200).json(reportsWithDetails);
+    } catch (error) {
+        console.error("Error fetching reports:", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
+});
+
+
+
 
   // Fetch stories
   app.get('/api/social_media/stories', async (req, res) => {

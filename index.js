@@ -833,66 +833,66 @@ app.get('/api/social_media/posts', async (req, res) => {
   });
   
 
-  // Like a post
-  app.post('/api/social_media/post/like', async (req, res) => {
-    const { postId } = req.params;  // Get post ID from URL parameters
-    const { userId } = req.body;    // Get user ID from request body
+//   // Like a post
+//   app.post('/api/social_media/post/like', async (req, res) => {
+//     const { postId } = req.params;  // Get post ID from URL parameters
+//     const { userId } = req.body;    // Get user ID from request body
   
-    try {
-      // Find the post by its ID to ensure it exists
-      const post = await database.collection('posts').findOne({ _id: new ObjectId(postId) });
+//     try {
+//       // Find the post by its ID to ensure it exists
+//       const post = await database.collection('posts').findOne({ _id: new ObjectId(postId) });
   
-    //   if (!post) {
-    //     return res.status(404).json({ message: 'Post not found' });
-    //   }
+//     //   if (!post) {
+//     //     return res.status(404).json({ message: 'Post not found' });
+//     //   }
   
-      // Check if the user has already liked the post
-      const existingLike = await database.collection('like').findOne({
-        postId: new ObjectId(postId),
-        userId: new ObjectId(userId),
-      });
+//       // Check if the user has already liked the post
+//       const existingLike = await database.collection('like').findOne({
+//         postId: new ObjectId(postId),
+//         userId: new ObjectId(userId),
+//       });
   
-      if (existingLike) {
-        // If the user has already liked the post, remove the like
-        await database.collection('like').deleteOne({ _id: existingLike._id });
+//       if (existingLike) {
+//         // If the user has already liked the post, remove the like
+//         await database.collection('like').deleteOne({ _id: existingLike._id });
   
-        // Optionally, send a notification (e.g., "User X removed their like from your post")
-        const notification = {
-          userId: post.userId, // The user who created the post
-          type: 'like_removed',
-          message: `${userId} removed their like from your post`,
-          postId: new ObjectId(postId),
-          timestamp: new Date(),
-        };
-        await database.collection('notification').insertOne(notification);
+//         // Optionally, send a notification (e.g., "User X removed their like from your post")
+//         const notification = {
+//           userId: post.userId, // The user who created the post
+//           type: 'like_removed',
+//           message: `${userId} removed their like from your post`,
+//           postId: new ObjectId(postId),
+//           timestamp: new Date(),
+//         };
+//         await database.collection('notification').insertOne(notification);
   
-        return res.status(200).json({ message: 'Like removed' });
-      } else {
-        // If the user hasn't liked the post yet, insert a new like
-        await database.collection('like').insertOne({
-          postId: new ObjectId(postId),
-          userId: new ObjectId(userId),
-          like: true, // Boolean indicating like status
-          timestamp: new Date(),
-        });
+//         return res.status(200).json({ message: 'Like removed' });
+//       } else {
+//         // If the user hasn't liked the post yet, insert a new like
+//         await database.collection('like').insertOne({
+//           postId: new ObjectId(postId),
+//           userId: new ObjectId(userId),
+//           like: true, // Boolean indicating like status
+//           timestamp: new Date(),
+//         });
   
-        // Optionally, create a notification for the post owner
-        const notification = {
-          userId: post.userId,  // The user who created the post
-          type: 'like',
-          message: `${userId} liked your post`,
-          postId: new ObjectId(postId),
-          timestamp: new Date(),
-        };
-        await database.collection('notification').insertOne(notification);
+//         // Optionally, create a notification for the post owner
+//         const notification = {
+//           userId: post.userId,  // The user who created the post
+//           type: 'like',
+//           message: `${userId} liked your post`,
+//           postId: new ObjectId(postId),
+//           timestamp: new Date(),
+//         };
+//         await database.collection('notification').insertOne(notification);
   
-        return res.status(200).json({ message: 'Post liked' });
-      }
-    } catch (error) {
-      console.error('Error liking post:', error);
-      res.status(500).json({ message: 'Server error' });
-    }
-  });
+//         return res.status(200).json({ message: 'Post liked' });
+//       }
+//     } catch (error) {
+//       console.error('Error liking post:', error);
+//       res.status(500).json({ message: 'Server error' });
+//     }
+//   });
   
 
 //store LIKE API

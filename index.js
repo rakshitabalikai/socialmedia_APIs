@@ -1707,7 +1707,7 @@ app.put('/api/social_media/admin/editstaff/:id', async (req, res) => {
 
 
 
-
+//messages fetch
 app.get('/api/social_media/messages/:sender_id/:receiver_id', async (req, res) => {
     const { sender_id, receiver_id } = req.params;
     console.log("sender",sender_id,"reciver",receiver_id);
@@ -1772,10 +1772,10 @@ const WebSocket = require('ws');
 
 
 // Create WebSocket server
-const wss = new WebSocket.Server({ server });
+const ws = new WebSocket.Server({ server });
 const activeConnections = {}; // Store user connections by user ID
 
-wss.on('connection', ws => {
+ws.on('connection', ws => {
     console.log('New client connected');
 
     ws.on('message', async data => {
@@ -1815,7 +1815,7 @@ wss.on('connection', ws => {
                 message,
                 timestamp: new Date()
             });
-
+            console.log(message);
             // Add notification for the receiver
             const notification = {
                 userId: receiver_id, // The user receiving the notification

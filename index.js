@@ -1748,6 +1748,65 @@ app.post('/api/social_media/messages/delete', async (req, res) => {
     }
   });
 
+// Create a new group
+app.post('/api/social_media/admin/groups', async (req, res) => {
+    try {
+        const { groupName, users } = req.body;
+        console.log(groupName,users);
+        // Validate input
+        if (!groupName || !users || users.length === 0) {
+            return res.status(400).json({ message: "Group name and users are required." });
+        }
+
+        // Fetch user details from the "user" collection
+        const userDetails = await database
+            .collection("user")
+            .find({ _id: { $in: users.map(id => new ObjectId(id)) } }) // Assumes `users` contains user IDs
+            .toArray();
+
+        // Validate if user details are found
+        if (!userDetails || userDetails.length !== users.length) {
+            return res.status(400).json({ message: "Some users could not be found." });
+        }
+
+        // Create the group document
+        const group = {
+            groupName,
+            users: userDetails.map(user => ({ id: user._id, name: user.name })), // Save user ID and name
+            createdAt: new Date(),
+        };
+
+        const result = await database.collection("groups").insertOne(group);
+        res.json({ message: "Group created successfully!", group });
+    } catch (error) {
+        console.error("Error creating group:", error);
+        res.status(500).json({ message: "Error creating group", error });
+    }
+});
+
+
+// Fetch all groups
+app.get('/api/social_media/admin/groups', async (req, res) => {
+    try {
+        const groups = await database.collection("groups").find().toArray();
+
+        // Populate user details for each group
+        for (const group of groups) {
+            group.users = await database
+                .collection("user")
+                .find({ _id: { $in: group.users.map(user => new ObjectId(user.id)) } })
+                .toArray();
+        }
+
+        res.json({ groups });
+    } catch (error) {
+        console.error("Error fetching groups:", error);
+        res.status(500).json({ message: "Error fetching groups data", error });
+    }
+});
+
+
+
   
 
 
@@ -1858,4 +1917,3 @@ ws.on('connection', ws => {
         });
     });
 });
-

@@ -596,46 +596,60 @@ app.get('/api/social_media/suggestions/:user_id', async (req, res) => {
     }
 });
 
-
-
-
-app.get('/api/social_media/user/:userId', async (req, res) => {
-    const { userId } = req.params;  // Get userId from the request parameters
-
-    // Check if the userId is a valid MongoDB ObjectId
-    if (!ObjectId.isValid(userId)) {
-        return res.status(400).json({ message: "Invalid user ID" });
+//comment api
+app.post('/api/social_media/comments', async (req, res) => {
+    console.log("Request body:", req.body);
+    const { user_id, post_id, comment } = req.body;
+    console.log("Parsed values:", user_id, post_id, comment);
+  
+    if (!user_id || !post_id || !comment) {
+      return res.status(400).json({ message: 'user_id, post_id, and comment are required.' });
     }
-
+  
     try {
-        // Fetch the user from the database based on userId
-        const user = await database.collection("user").findOne({ _id: new ObjectId(userId) });
-
-        // If user not found, return error
-        if (!user) {
-            return res.status(404).json({ message: "User not found" });
-        }
-
-        // If user found, construct the user object to return
-        const userData = {
-            id: user._id,
-            username: user.username,
-            fullName: user.fullName,
-            profile_pic: user.profile_pic,
-            bio: user.bio,
-            gender: user.gender,
-            dateOfBirth: user.dateOfBirth,
+        const newComment = {
+          user_id,
+          post_id,
+          comment,
+          timestamp: new Date(),
         };
+    
+        // Insert the comment into the comments collection
+        const commentResult = await database.collection('comments').insertOne(newComment);
+    
+        // Fetch the post owner's user_id
+        const postOwner = await database.collection('posts').findOne({ _id: post_id });
+        if (postOwner && postOwner.user_id !== user_id) {
+          const notification = {
+            user_id: postOwner.user_id,
+            post_id,
+            comment_id: commentResult.insertedId,
+            message: `User ${user_id} commented on your post.`,
+            timestamp: new Date(),
+            is_read: false,
+          };
+    
+          // Insert the notification into the notifications collection
+          await database.collection('notifications').insertOne(notification);
+        }
+    
+        res.status(201).json({ message: 'Comment added successfully', commentId: commentResult.insertedId });
+      } catch (error) {
+        console.error('Error adding comment:', error);
+        res.status(500).json({ message: 'Internal server error' });
+      }
+    // Remaining logic...
+  });
+  
+app.post('/api/social_media/comments', async (req, res) => {
+    const { user_id, post_id, comment } = req.body;
+    console.log(user_id, post_id, comment);
 
-        // Send the user data as JSON response
-        res.json({ user: userData });
-        console.log(userData);
-    } catch (error) {
-        // Handle server errors
-        console.error("Error fetching user profile:", error);
-        res.status(500).json({ message: "Internal server error", error });
+    if (!user_id || !post_id || !comment) {
+      return res.status(400).json({ message: 'user_id, post_id, and comment are required.' });
     }
-});
+    
+  });
 
 // Post
 app.post('/api/social_media/uploadpost', upload.single('file'), async (req, res) => {
@@ -955,7 +969,25 @@ app.post('/api/social_media/post/like', async (req, res) => {
   }
 });
 
-
+// Check LIKE Status API
+app.get('/api/social_media/post/like/status', async (req, res) => {
+    const { postId, userId } = req.query; // Accept postId and userId as query parameters
+    console.log(postId,userId);
+    try {
+      // Check if the like exists in the database
+      const existingLike = await database.collection('like').findOne({
+        postId: new ObjectId(postId),
+        userId: new ObjectId(userId),
+      });
+  
+      // Return true if the like exists, otherwise false
+      res.status(200).json({ liked: !!existingLike });
+    } catch (error) {
+      console.error('Error checking like status:', error);
+      res.status(500).json({ message: 'Server error' });
+    }
+  });
+  
   app.get('/api/social_media/file/:id', async (req, res) => {
     try {
       const fileId = new ObjectId(req.params.id);

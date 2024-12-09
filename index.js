@@ -1780,6 +1780,37 @@ app.post('/api/social_media/messages/delete', async (req, res) => {
     }
   });
 
+
+  // GET route to fetch all created groups
+app.get('/api/social_media/admin/groups', async (req, res) => {
+    try {
+        // Retrieve all groups from the "groups" collection
+        const groups = await database.collection("groups").find().toArray();
+
+        // Check if groups exist
+        if (!groups || groups.length === 0) {
+            return res.status(404).json({ message: "No groups found." });
+        }
+
+        // Format the response to include user details and group information
+        const formattedGroups = groups.map(group => ({
+            groupName: group.groupName,
+            createdAt: group.createdAt,
+            users: group.users.map(user => ({
+                id: user.id,
+                name: user.fullName,
+            })),
+        }));
+
+        // Respond with the formatted groups
+        res.json({ message: "Groups retrieved successfully!", groups: formattedGroups });
+    } catch (error) {
+        console.error("Error fetching groups:", error);
+        res.status(500).json({ message: "Error fetching groups", error });
+    }
+});
+
+
 // Create a new group
 app.post('/api/social_media/admin/groups', async (req, res) => {
     try {
@@ -1804,7 +1835,7 @@ app.post('/api/social_media/admin/groups', async (req, res) => {
         // Create the group document
         const group = {
             groupName,
-            users: userDetails.map(user => ({ id: user._id, name: user.name })), // Save user ID and name
+            users: userDetails.map(user => ({ id: user._id, name: user.fullName})), // Save user ID and name
             createdAt: new Date(),
         };
 
@@ -1817,34 +1848,7 @@ app.post('/api/social_media/admin/groups', async (req, res) => {
 });
 
 
-// Fetch all groups
-app.get('/api/social_media/admin/groups', async (req, res) => {
-    try {
-        const groups = await database.collection("groups").find().toArray();
 
-        // Populate user details for each group
-        for (const group of groups) {
-            group.users = await database
-                .collection("user")
-                .find({ _id: { $in: group.users.map(user => new ObjectId(user.id)) } })
-                .toArray();
-        }
-
-        res.json({ groups });
-    } catch (error) {
-        console.error("Error fetching groups:", error);
-        res.status(500).json({ message: "Error fetching groups data", error });
-    }
-});
-
-
-
-  
-
-
-
-
-  
 
 // Start the server
 // const PORT = process.env.PORT || 4000;

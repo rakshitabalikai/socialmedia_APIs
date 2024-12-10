@@ -171,7 +171,134 @@ app.post('/api/social_media/login', async (req, res) => {
       res.status(500).json({ message: "Error during login", error });
     }
   });
+
+
+  const crypto = require('crypto');
+const nodemailer = require('nodemailer');
+require('dotenv').config(); // For environment variables
+
+// Nodemailer transporter setup
+const transporter = nodemailer.createTransport({
+    service: 'Gmail',
+    auth: {
+        user: process.env.EMAIL_USER, // Your Gmail address
+        pass: process.env.EMAIL_PASS, // Your app password
+    },
+});
+
+// Request Password Reset
+app.post('/api/social_media/reset-password/request', async (req, res) => {
+    const { email } = req.body;
+
+    console.log(`Request received to reset password for email: ${email}`);
+
+    if (!email) {
+        console.log("Email is required");
+        return res.status(400).json({ message: "Email is required" });
+    }
+
+    try {
+        const user = await database.collection("user").findOne({ email });
+
+        if (!user) {
+            console.log(`No user found with email: ${email}`);
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        // Generate a 6-digit OTP and set expiry time
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const otpExpiry = Date.now() + 5 * 60 * 1000; // OTP valid for 5 minutes
+
+        console.log(`Generated OTP: ${otp} with expiry at: ${new Date(otpExpiry)}`);
+
+        // Save OTP and expiry in the database
+        await database.collection("user").updateOne(
+            { email },
+            { $set: { otp, otpExpiry } }
+        );
+
+        // Send OTP via email
+        const mailOptions = {
+            from: `"Your App Name" <${process.env.EMAIL_USER}>`,
+            to: email,
+            subject: 'Password Reset OTP',
+            text: `Your OTP for password reset is: ${otp}. It is valid for 5 minutes.`,
+        };
+
+        console.log(`Sending OTP email to: ${email}`);
+        console.log(otp);
+        transporter.sendMail(mailOptions);
+
+        console.log(`OTP email sent successfully to: ${email}`);
+
+        res.json({ message: "OTP sent to email successfully" });
+    } catch (error) {
+        console.error("Error processing request:", error.message);
+        res.status(500).json({ message: "Error processing request", error: error.message });
+    }
+});
+
+
+
+
   
+  app.post('/api/social_media/reset-password/verify-otp', async (req, res) => {
+    const { email, otp } = req.body;
+
+    if (!email || !otp) {
+        return res.status(400).json({ message: "Email and OTP are required" });
+    }
+
+    try {
+        const user = await database.collection("user").findOne({
+            email,
+            otp,
+            otpExpiry: { $gt: Date.now() }, // Check if OTP is not expired
+        });
+
+        if (!user) {
+            return res.status(400).json({ message: "Invalid or expired OTP" });
+        }
+
+        res.json({ message: "OTP verified successfully", email });
+    } catch (error) {
+        res.status(500).json({ message: "Error verifying OTP", error });
+    }
+});
+
+
+
+app.post('/api/social_media/reset-password/update', async (req, res) => {
+    const { email, newPassword } = req.body;
+
+    if (!email || !newPassword) {
+        return res.status(400).json({ message: "Email and new password are required" });
+    }
+
+    try {
+        const user = await database.collection("user").findOne({ email });
+
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        // Hash the new password
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+        // Update the user's password and remove the OTP
+        await database.collection("user").updateOne(
+            { email },
+            { $set: { password: hashedPassword }, $unset: { otp: "", otpExpiry: "" } }
+        );
+
+        res.json({ message: "Password updated successfully" });
+    } catch (error) {
+        res.status(500).json({ message: "Error updating password", error });
+    }
+});
+
+
+
 
 // Endpoint for profile updates with file upload handling
 app.post('/api/social_media/update_profile', async (req, res) => {

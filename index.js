@@ -174,17 +174,46 @@ app.post('/api/social_media/login', async (req, res) => {
 
 
   const crypto = require('crypto');
-const nodemailer = require('nodemailer');
+// const nodemailer = require('nodemailer');
 require('dotenv').config(); // For environment variables
 
 // Nodemailer transporter setup
+require('dotenv').config();
+
+const nodemailer = require('nodemailer');
+require('dotenv').config();
+
 const transporter = nodemailer.createTransport({
-    service: 'Gmail',
+    secure:true,
+    host:'smtp.gmail.com',
+    port:465,
     auth: {
-        user: process.env.EMAIL_USER, // Your Gmail address
-        pass: process.env.EMAIL_PASS, // Your app password
+        user: process.env.EMAIL,
+        pass: process.env.PASSWORD,
     },
 });
+
+// const mailOptions = {
+//     // from: process.env.EMAIL,
+//     from: `"Nodemailer" <${process.env.EMAIL}>`,
+//     to: 'punithshanakanahalli@gmail.com.com',
+//     subject: 'Test Email',
+//     text: 'This is a test email.',
+// };
+// transporter.sendMail({
+//     to: 'punithshanakanahalli@gmail.com.com',
+//     subject: 'Test Email',
+//     html: 'This is a test email.',
+// });
+
+// transporter.sendMail(mailOptions, (error, info) => {
+//     if (error) {
+//         console.error('Error:', error);
+//     } else {
+//         console.log('Email sent:', info.response);
+//     }
+// });
+
 
 // Request Password Reset
 app.post('/api/social_media/reset-password/request', async (req, res) => {
@@ -219,7 +248,7 @@ app.post('/api/social_media/reset-password/request', async (req, res) => {
 
         // Send OTP via email
         const mailOptions = {
-            from: `"Your App Name" <${process.env.EMAIL_USER}>`,
+            from: `"Nodemailer" <${process.env.EMAIL}>`,
             to: email,
             subject: 'Password Reset OTP',
             text: `Your OTP for password reset is: ${otp}. It is valid for 5 minutes.`,

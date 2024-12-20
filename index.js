@@ -410,6 +410,7 @@ app.get('/api/social_media/search', async (req, res) => {
     }
 });
 
+//follow
 app.post('/api/social_media/follow', async (req, res) => {
     try {
         const { follower_id, following_id } = req.body;
@@ -754,58 +755,87 @@ app.get('/api/social_media/suggestions/:user_id', async (req, res) => {
 
 //comment api
 app.post('/api/social_media/comments', async (req, res) => {
-    console.log("Request body:", req.body);
-    const { user_id, post_id, comment } = req.body;
-    console.log("Parsed values:", user_id, post_id, comment);
-  
-    if (!user_id || !post_id || !comment) {
-      return res.status(400).json({ message: 'user_id, post_id, and comment are required.' });
+    console.log("Request body received:", req.body);
+    
+    const { userid, post_id, comment } = req.body;
+
+    // Input validation
+    if (!userid || !post_id || !comment) {
+        console.error("Missing required fields:", { userid, post_id, comment });
+        return res.status(400).json({ message: 'userid, post_id, and comment are required.' });
     }
-  
+
     try {
         const newComment = {
-          user_id,
-          post_id,
-          comment,
-          timestamp: new Date(),
-        };
-    
-        // Insert the comment into the comments collection
-        const commentResult = await database.collection('comments').insertOne(newComment);
-    
-        // Fetch the post owner's user_id
-        const postOwner = await database.collection('posts').findOne({ _id: post_id });
-        if (postOwner && postOwner.user_id !== user_id) {
-          const notification = {
-            user_id: postOwner.user_id,
+            userid,
             post_id,
-            comment_id: commentResult.insertedId,
-            message: `User ${user_id} commented on your post.`,
+            comment,
             timestamp: new Date(),
-            is_read: false,
-          };
-    
-          // Insert the notification into the notifications collection
-          await database.collection('notifications').insertOne(notification);
+        };
+
+        // Insert the comment into the database
+        const commentResult = await database.collection('comment').insertOne(newComment);
+
+        // Fetch post owner details
+        const postOwner = await database.collection('posts').findOne({ _id: new ObjectId(post_id) });
+
+        if (postOwner && postOwner.user_id !== userid) {
+            // Fetch commenter's user data
+            const commenter = await database.collection('user').findOne(
+                { _id: new ObjectId(userid) },
+                { projection: { username: 1, profile_pic: 1 } }
+            );
+
+            // Construct the notification
+            const notification = {
+                user_id: postOwner.user_id, // The user receiving the notification
+                sender_id: userid, // The user who commented
+                post_id,
+                comment,
+                comment_id: commentResult.insertedId,
+                message: `${commenter.username} commented on your post: "${comment}"`,
+                profile_pic: commenter.profile_pic,
+                timestamp: new Date(),
+                is_read: false,
+            };
+
+            // Insert the notification into the database
+            await database.collection('notification').insertOne(notification);
+
+            // Send real-time notification to the post owner if they are connected
+            if (activeConnections[postOwner.user_id]) {
+                activeConnections[postOwner.user_id].forEach(receiverWs => {
+                    receiverWs.send(JSON.stringify({
+                        type: "notification",
+                        data: {
+                            sender_id: userid,
+                            message: notification.message,
+                            profile_pic: notification.profile_pic,
+                            timestamp: notification.timestamp,
+                        },
+                    }));
+                });
+            }
         }
-    
+
         res.status(201).json({ message: 'Comment added successfully', commentId: commentResult.insertedId });
-      } catch (error) {
+    } catch (error) {
         console.error('Error adding comment:', error);
         res.status(500).json({ message: 'Internal server error' });
-      }
-    // Remaining logic...
-  });
-  
-app.post('/api/social_media/comments', async (req, res) => {
-    const { user_id, post_id, comment } = req.body;
-    console.log(user_id, post_id, comment);
-
-    if (!user_id || !post_id || !comment) {
-      return res.status(400).json({ message: 'user_id, post_id, and comment are required.' });
     }
+});
+
+
+  
+// app.post('/api/social_media/comments', async (req, res) => {
+//     const { user_id, post_id, comment } = req.body;
+//     console.log(user_id, post_id, comment);
+
+//     if (!user_id || !post_id || !comment) {
+//       return res.status(400).json({ message: 'user_id, post_id, and comment are required.' });
+//     }
     
-  });
+//   });
 
 // Post
 app.post('/api/social_media/uploadpost', upload.single('file'), async (req, res) => {
@@ -1207,33 +1237,32 @@ app.get('/api/social_media/posts/videos', async (req, res) => {
   //fetch notification
   app.get('/api/social_media/notifications/:userId', async (req, res) => {
     const { userId } = req.params;
-    console.log(userId);
     try {
         // Step 1: Fetch notifications for the given userId
         const notifications = await database.collection("notification")
-            .find({ userId, isRead: false })   // Fetch only unread notifications; remove isRead to get all
-            .sort({ timestamp: -1 })           // Sort by most recent first
+            .find({ userId, isRead: false }) // Fetch only unread notifications; remove `isRead` to get all
+            .sort({ timestamp: -1 })         // Sort by most recent first
             .toArray();
-        console.log(notifications);
-        // Step 2: Extract unique senderIds from notifications
+
+        // Step 2: Extract unique senderIds
         const senderIds = [...new Set(notifications.map(n => n.senderId))];
-        console.log(senderIds);
-        // Step 3: Fetch user details for each unique senderId
+
+        // Step 3: Fetch user details for each senderId
         const users = await database.collection("users")
             .find({ _id: { $in: senderIds } })
             .project({ username: 1, profilePic: 1 })
             .toArray();
-        console.log(users);
-        // Step 4: Map user details by senderId for easier access
+
+        // Map user details by senderId for easier access
         const userMap = users.reduce((acc, user) => {
             acc[user._id] = {
                 username: user.username,
-                profilePic: user.profilePic || "https://via.placeholder.com/150" // Set default if empty
+                profilePic: user.profilePic || "https://via.placeholder.com/150" // Default if empty
             };
             return acc;
         }, {});
 
-        // Step 5: Combine notifications with their sender details
+        // Step 4: Enrich notifications with sender/user details
         const enrichedNotifications = notifications.map(notification => ({
             ...notification,
             senderDetails: userMap[notification.senderId] || {}
@@ -1246,6 +1275,8 @@ app.get('/api/social_media/posts/videos', async (req, res) => {
         res.status(500).json({ message: 'Internal server error' });
     }
 });
+
+
 
 //report user
 app.post('/api/social_media/report', upload.single('file'), async (req, res) => {

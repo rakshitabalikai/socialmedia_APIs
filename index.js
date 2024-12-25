@@ -1234,42 +1234,41 @@ app.get('/api/social_media/posts/videos', async (req, res) => {
   });
   
 
-  //fetch notification
-  app.get('/api/social_media/notifications/:userId', async (req, res) => {
+  // Fetch notifications with sender details
+app.get('/api/social_media/notifications/:userId', async (req, res) => {
     const { userId } = req.params;
     try {
-        // Step 1: Fetch notifications for the given userId
-        const notifications = await database.collection("notification")
-            .find({ userId, isRead: false }) // Fetch only unread notifications; remove `isRead` to get all
-            .sort({ timestamp: -1 })         // Sort by most recent first
-            .toArray();
-
-        // Step 2: Extract unique senderIds
-        const senderIds = [...new Set(notifications.map(n => n.senderId))];
-
-        // Step 3: Fetch user details for each senderId
-        const users = await database.collection("users")
-            .find({ _id: { $in: senderIds } })
-            .project({ username: 1, profilePic: 1 })
-            .toArray();
-
-        // Map user details by senderId for easier access
-        const userMap = users.reduce((acc, user) => {
-            acc[user._id] = {
-                username: user.username,
-                profilePic: user.profilePic || "https://via.placeholder.com/150" // Default if empty
-            };
-            return acc;
-        }, {});
-
-        // Step 4: Enrich notifications with sender/user details
-        const enrichedNotifications = notifications.map(notification => ({
-            ...notification,
-            senderDetails: userMap[notification.senderId] || {}
-        }));
+        // Use MongoDB aggregation pipeline to fetch notifications and enrich with sender details
+        const notifications = await database.collection("notification").aggregate([
+            { $match: { userId, isRead: false } },  // Fetch only unread notifications; remove isRead to get all
+            { $sort: { timestamp: -1 } },           // Sort by most recent first
+            {
+                $lookup: {
+                    from: "users",                  // Collection name for users
+                    localField: "senderId",
+                    foreignField: "_id",            // Match senderId with _id in the users collection
+                    as: "senderDetails"
+                }
+            },
+            { $unwind: { path: "$senderDetails", preserveNullAndEmptyArrays: true } }, // Flatten senderDetails array
+            {
+                $project: {
+                    userId: 1,
+                    senderId: 1,
+                    type: 1,
+                    message: 1,
+                    isRead: 1,
+                    timestamp: 1,
+                    "senderDetails.username": 1,
+                    "senderDetails.profilePic": {
+                        $ifNull: ["$senderDetails.profilePic", "https://via.placeholder.com/150"] // Set default if empty
+                    }
+                }
+            }
+        ]).toArray();
 
         // Send response with enriched notifications
-        res.status(200).json({ notifications: enrichedNotifications });
+        res.status(200).json({ notifications });
     } catch (error) {
         console.error('Error fetching notifications:', error);
         res.status(500).json({ message: 'Internal server error' });
@@ -1428,6 +1427,24 @@ app.post('/api/social_media/admin/login', async (req, res) => {
         res.status(500).json({ message: "Error during admin login", error });
     }
 });
+
+// Fetch Counts Route
+app.get('/api/social_media/stats', async (req, res) => {
+    try {
+        const userCount = await database.collection("user").countDocuments();
+        const studentCount = await database.collection("students").countDocuments();
+        const postCount = await database.collection("posts").countDocuments();
+        console.log(userCount,studentCount,postCount);
+        res.json({
+            userCount,
+            studentCount,
+            postCount
+        });
+    } catch (error) {
+        res.status(500).json({ message: "Error fetching statistics", error });
+    }
+});
+
 
 // Fetch all students
 app.get('/api/social_media/admin/students', async (req, res) => {

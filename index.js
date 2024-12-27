@@ -16,7 +16,7 @@ const gridfsStream = require('gridfs-stream');
 const WebSocketServer = require('ws').WebSocketServer;
 let gfs; // Global variable for GridFS Stream
 let gridfsBucket; // GridFSBucket for file storage
-
+require('dotenv').config();
 // Middleware
 app.use(cors());
 app.use(bodyParser.json({ limit: '200mb' })); // Setting limit to 200MB for JSON bodies
@@ -31,8 +31,9 @@ app.use(session({
     cookie: { secure: false }
 }));
 
+console.log(process.env.DBURL);
 // MongoDB Connection
-const dburl = "mongodb+srv://punithshanakanahalli:RaPufoHFjZl6eFtd@cluster0.ziyvd.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
+const dburl = process.env.DBURL;
 const databasename = "social_media";
 let database;
 
@@ -182,6 +183,7 @@ require('dotenv').config();
 
 const nodemailer = require('nodemailer');
 require('dotenv').config();
+
 
 const transporter = nodemailer.createTransport({
     secure:true,
